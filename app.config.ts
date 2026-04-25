@@ -23,6 +23,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     supportsTablet: false,
     bundleIdentifier: 'com.francoconsulting.winescanner',
     buildNumber: '1',
+    usesAppleSignIn: true,
     infoPlist: {
       NSCameraUsageDescription:
         'Wir benötigen Zugriff auf deine Kamera, um Weinetiketten zu scannen.',
@@ -42,7 +43,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   web: {
     favicon: './assets/favicon.png',
   },
-  plugins: ['expo-router', 'expo-secure-store'],
+  plugins: ['expo-router', 'expo-secure-store', 'expo-apple-authentication'],
   experiments: {
     typedRoutes: true,
   },
