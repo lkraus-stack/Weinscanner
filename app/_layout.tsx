@@ -3,6 +3,7 @@ import { Stack, useRouter, useSegments } from 'expo-router';
 import { useEffect } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
+import { Toast } from '@/components/toast';
 import { useAuth } from '@/hooks/useAuth';
 import { colors } from '@/theme/colors';
 
@@ -43,7 +44,12 @@ export default function RootLayout() {
     );
   }
 
-  return <Stack screenOptions={{ headerShown: false }} />;
+  return (
+    <>
+      <Stack screenOptions={{ headerShown: false }} />
+      <Toast />
+    </>
+  );
 }
 
 const styles = StyleSheet.create({

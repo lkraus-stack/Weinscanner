@@ -1,12 +1,25 @@
-import { KeyboardAvoidingView, Platform, StyleSheet, Text, View } from 'react-native';
+import { useState } from 'react';
+import {
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 
 import { AppleSignInButton } from '@/components/auth/AppleSignInButton';
 import { EmailOtpForm } from '@/components/auth/EmailOtpForm';
+import { EmailPasswordForm } from '@/components/auth/EmailPasswordForm';
 import { colors } from '@/theme/colors';
 import { radii, spacing } from '@/theme/spacing';
 import { typography } from '@/theme/typography';
 
+type LoginMode = 'password' | 'code';
+
 export default function LoginScreen() {
+  const [loginMode, setLoginMode] = useState<LoginMode>('password');
+
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -29,7 +42,42 @@ export default function LoginScreen() {
             <View style={styles.divider} />
           </View>
 
-          <EmailOtpForm />
+          <View style={styles.segmentedControl}>
+            <Pressable
+              style={[
+                styles.segmentButton,
+                loginMode === 'password' && styles.segmentButtonActive,
+              ]}
+              onPress={() => setLoginMode('password')}
+            >
+              <Text
+                style={[
+                  styles.segmentText,
+                  loginMode === 'password' && styles.segmentTextActive,
+                ]}
+              >
+                Passwort
+              </Text>
+            </Pressable>
+            <Pressable
+              style={[
+                styles.segmentButton,
+                loginMode === 'code' && styles.segmentButtonActive,
+              ]}
+              onPress={() => setLoginMode('code')}
+            >
+              <Text
+                style={[
+                  styles.segmentText,
+                  loginMode === 'code' && styles.segmentTextActive,
+                ]}
+              >
+                Code
+              </Text>
+            </Pressable>
+          </View>
+
+          {loginMode === 'password' ? <EmailPasswordForm /> : <EmailOtpForm />}
         </View>
       </View>
     </KeyboardAvoidingView>
@@ -84,5 +132,32 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontSize: typography.size.sm,
     fontWeight: typography.weight.bold,
+  },
+  segmentedControl: {
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: spacing.xs,
+    padding: spacing.xs,
+  },
+  segmentButton: {
+    alignItems: 'center',
+    borderRadius: radii.sm,
+    flex: 1,
+    justifyContent: 'center',
+    minHeight: 40,
+  },
+  segmentButtonActive: {
+    backgroundColor: colors.primary,
+  },
+  segmentText: {
+    color: colors.textSecondary,
+    fontSize: typography.size.md,
+    fontWeight: typography.weight.bold,
+  },
+  segmentTextActive: {
+    color: colors.white,
   },
 });

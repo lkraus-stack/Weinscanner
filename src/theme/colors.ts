@@ -7,6 +7,7 @@ export const colors = {
   text: '#1A1A1A',
   textSecondary: '#6B6B6B',
   placeholder: '#8A8178',
+  shadow: '#1A1A1A',
   border: '#E5E0D5',
   success: '#2E7D32',
   warning: '#F57C00',

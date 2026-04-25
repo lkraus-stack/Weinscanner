@@ -97,6 +97,12 @@ export default function AppLayout() {
           ),
         }}
       />
+      <Tabs.Screen
+        name="scan-review"
+        options={{
+          href: null,
+        }}
+      />
     </Tabs>
   );
 }

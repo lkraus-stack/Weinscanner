@@ -43,7 +43,19 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   web: {
     favicon: './assets/favicon.png',
   },
-  plugins: ['expo-router', 'expo-secure-store', 'expo-apple-authentication'],
+  plugins: [
+    'expo-router',
+    'expo-secure-store',
+    'expo-apple-authentication',
+    [
+      'expo-camera',
+      {
+        cameraPermission:
+          'Wir benötigen Zugriff auf deine Kamera, um Weinetiketten zu scannen.',
+        recordAudioAndroid: false,
+      },
+    ],
+  ],
   experiments: {
     typedRoutes: true,
   },

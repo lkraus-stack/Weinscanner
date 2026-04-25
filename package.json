@@ -7,16 +7,26 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "lint": "expo lint",
+    "dev:create-user": "tsx scripts/create-dev-user.ts",
+    "test:storage": "tsx scripts/test-storage.ts",
     "web": "expo start --web"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",
     "@supabase/supabase-js": "^2.104.1",
     "babel-preset-expo": "~54.0.10",
+    "base64-arraybuffer": "^1.0.2",
     "expo": "~54.0.33",
     "expo-apple-authentication": "~8.0.8",
+    "expo-camera": "~17.0.10",
     "expo-constants": "~18.0.13",
     "expo-crypto": "~15.0.8",
+    "expo-file-system": "~19.0.21",
+    "expo-font": "~14.0.11",
+    "expo-haptics": "~15.0.8",
+    "expo-image": "~3.0.11",
+    "expo-image-manipulator": "~14.0.8",
+    "expo-image-picker": "~17.0.10",
     "expo-linking": "~8.0.11",
     "expo-router": "~6.0.23",
     "expo-secure-store": "~15.0.8",
@@ -26,6 +36,7 @@
     "react-dom": "19.1.0",
     "react-native": "0.81.5",
     "react-native-safe-area-context": "~5.6.0",
+    "react-native-screens": "~4.16.0",
     "react-native-url-polyfill": "^3.0.0",
     "react-native-web": "^0.21.0",
     "zustand": "^5.0.12"
@@ -36,6 +47,7 @@
     "eslint": "^9.0.0",
     "eslint-config-expo": "~10.0.0",
     "supabase": "^2.95.3",
+    "tsx": "^4.21.0",
     "typescript": "~5.9.2"
   },
   "private": true
