@@ -14,11 +14,19 @@ import { colors } from '@/theme/colors';
 import { radii, spacing } from '@/theme/spacing';
 import { typography } from '@/theme/typography';
 
+export type VintageSuggestionKind = 'recognized' | 'estimated';
+
 type Props = {
   knownYears?: number[];
   maxYear?: number;
   minYear?: number;
+  onAcceptSuggestion?: (
+    vintageYear: number,
+    kind: VintageSuggestionKind
+  ) => void;
   onChange: (vintageYear: number | null) => void;
+  suggestionKind?: VintageSuggestionKind;
+  suggestionReason?: string | null;
   suggestedYear?: number | null;
   value: number | null;
 };
@@ -35,7 +43,10 @@ export function VintageYearPicker({
   knownYears = [],
   maxYear = new Date().getFullYear() + 1,
   minYear = 1900,
+  onAcceptSuggestion,
   onChange,
+  suggestionKind = 'recognized',
+  suggestionReason,
   suggestedYear,
   value,
 }: Props) {
@@ -74,6 +85,11 @@ export function VintageYearPicker({
     setManualError(null);
     setManualYear('');
     setIsPickerOpen(false);
+  }
+
+  function acceptSuggestion(year: number) {
+    selectYear(year);
+    onAcceptSuggestion?.(year, suggestionKind);
   }
 
   function submitManualYear() {
@@ -118,19 +134,40 @@ export function VintageYearPicker({
 
       {showSuggestion ? (
         <View style={styles.section}>
-          <Text style={styles.sectionLabel}>Vorschlag der KI</Text>
+          <Text style={styles.sectionLabel}>
+            {suggestionKind === 'estimated'
+              ? 'Geschätzter Jahrgang'
+              : 'Vorschlag der KI'}
+          </Text>
+          {suggestionKind === 'estimated' ? (
+            <Text style={styles.suggestionQuestion}>Ist das der Jahrgang?</Text>
+          ) : null}
           <Pressable
-            onPress={() => selectYear(suggestedYear)}
-            style={styles.suggestionButton}
+            onPress={() => acceptSuggestion(suggestedYear)}
+            style={[
+              styles.suggestionButton,
+              suggestionKind === 'estimated' && styles.estimatedSuggestionButton,
+            ]}
           >
             <Ionicons
-              name="sparkles-outline"
+              name={
+                suggestionKind === 'estimated'
+                  ? 'help-circle-outline'
+                  : 'sparkles-outline'
+              }
               size={18}
               color={colors.primaryDark}
             />
             <Text style={styles.suggestionText}>{suggestedYear}</Text>
-            <Text style={styles.suggestionAction}>Übernehmen</Text>
+            <Text style={styles.suggestionAction}>
+              {suggestionKind === 'estimated'
+                ? 'Ja, übernehmen'
+                : 'Übernehmen'}
+            </Text>
           </Pressable>
+          {suggestionKind === 'estimated' && suggestionReason ? (
+            <Text style={styles.suggestionReason}>{suggestionReason}</Text>
+          ) : null}
         </View>
       ) : null}
 
@@ -456,6 +493,20 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     minHeight: 48,
     paddingHorizontal: spacing.md,
+  },
+  estimatedSuggestionButton: {
+    borderColor: colors.warning,
+  },
+  suggestionQuestion: {
+    color: colors.text,
+    fontSize: typography.size.sm,
+    fontWeight: typography.weight.bold,
+    lineHeight: typography.lineHeight.sm,
+  },
+  suggestionReason: {
+    color: colors.textSecondary,
+    fontSize: typography.size.sm,
+    lineHeight: typography.lineHeight.sm,
   },
   suggestionText: {
     color: colors.text,

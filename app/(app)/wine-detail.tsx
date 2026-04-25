@@ -17,6 +17,11 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
+  AddInventoryModal,
+  createEmptyInventoryFormValue,
+  type InventoryFormValue,
+} from '@/components/inventory/AddInventoryModal';
+import {
   createEmptyRatingFormValue,
   RatingModal,
   type RatingFormValue,
@@ -29,6 +34,12 @@ import {
   useScanDetail,
 } from '@/hooks/useScanDetail';
 import { useWineVintages } from '@/hooks/useWineVintages';
+import {
+  addToInventory,
+  findInventoryMatches,
+  increaseInventoryQuantity,
+  type InventoryRecord,
+} from '@/lib/inventory';
 import {
   getRatingForScan,
   type RatingRecord,
@@ -232,6 +243,26 @@ function ratingToFormValue(
   };
 }
 
+function normalizeInventoryLocation(value: string | null | undefined) {
+  return value?.trim().toLocaleLowerCase('de-DE') ?? '';
+}
+
+function findPreferredInventoryMatch(
+  matches: InventoryRecord[],
+  value: InventoryFormValue
+) {
+  const targetLocation = normalizeInventoryLocation(value.storageLocation);
+
+  return (
+    matches.find(
+      (match) =>
+        normalizeInventoryLocation(match.storage_location) === targetLocation
+    ) ??
+    matches[0] ??
+    null
+  );
+}
+
 async function reassignScanVintage({
   scanId,
   targetVintageYear,
@@ -394,6 +425,9 @@ function WineDetailContent({
   );
   const [isCorrectionModalVisible, setIsCorrectionModalVisible] =
     useState(false);
+  const [isInventoryModalVisible, setIsInventoryModalVisible] = useState(false);
+  const [isInventoryDuplicateModalVisible, setIsInventoryDuplicateModalVisible] =
+    useState(false);
   const [isRatingModalVisible, setIsRatingModalVisible] = useState(false);
   const [activeRating, setActiveRating] = useState<
     RatingRecord | ScanDetailRating | null
@@ -403,6 +437,15 @@ function WineDetailContent({
   const [isVintageModalVisible, setIsVintageModalVisible] = useState(false);
   const [selectedVintageYear, setSelectedVintageYear] = useState<number | null>(
     currentVintageYear
+  );
+  const [pendingInventoryValue, setPendingInventoryValue] =
+    useState<InventoryFormValue | null>(null);
+  const [inventoryMatches, setInventoryMatches] = useState<InventoryRecord[]>(
+    []
+  );
+  const inventoryInitialValue = useMemo(
+    () => createEmptyInventoryFormValue(),
+    []
   );
   const hasDescription = Boolean(
     hasText(vintage?.description_short) || hasText(vintage?.description_long)
@@ -504,6 +547,78 @@ function WineDetailContent({
     },
   });
 
+  async function invalidateInventoryCaches() {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['inventory'] }),
+      queryClient.invalidateQueries({ queryKey: ['inventory-stats'] }),
+      queryClient.invalidateQueries({ queryKey: ['scan-detail', detail.id] }),
+    ]);
+  }
+
+  const addInventoryMutation = useMutation({
+    mutationFn: async (value: InventoryFormValue) => {
+      if (!vintage) {
+        throw new Error('Jahrgang fehlt.');
+      }
+
+      return addToInventory({
+        notes: value.notes,
+        purchasePrice: value.purchasePrice,
+        purchasedAt: value.purchasedAt,
+        quantity: value.quantity,
+        storageLocation: value.storageLocation,
+        vintageId: vintage.id,
+      });
+    },
+    onError: async (error: unknown) => {
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert('Bestand konnte nicht gespeichert werden', getErrorMessage(error));
+    },
+    onSuccess: async () => {
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setIsInventoryModalVisible(false);
+      setIsInventoryDuplicateModalVisible(false);
+      setPendingInventoryValue(null);
+      setInventoryMatches([]);
+      showToast('Zum Bestand hinzugefügt');
+      await invalidateInventoryCaches();
+    },
+  });
+
+  const increaseInventoryMutation = useMutation({
+    mutationFn: async () => {
+      if (!pendingInventoryValue) {
+        throw new Error('Bestandsdaten fehlen.');
+      }
+
+      const match = findPreferredInventoryMatch(
+        inventoryMatches,
+        pendingInventoryValue
+      );
+
+      if (!match) {
+        throw new Error('Bestandseintrag wurde nicht gefunden.');
+      }
+
+      return increaseInventoryQuantity({
+        delta: pendingInventoryValue.quantity,
+        itemId: match.id,
+      });
+    },
+    onError: async (error: unknown) => {
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert('Bestand konnte nicht erhöht werden', getErrorMessage(error));
+    },
+    onSuccess: async () => {
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setIsInventoryDuplicateModalVisible(false);
+      setPendingInventoryValue(null);
+      setInventoryMatches([]);
+      showToast('Bestand aktualisiert');
+      await invalidateInventoryCaches();
+    },
+  });
+
   async function openRatingModal() {
     try {
       await Haptics.selectionAsync();
@@ -518,9 +633,42 @@ function WineDetailContent({
     }
   }
 
-  async function showInventoryStub() {
+  async function openInventoryModal() {
     await Haptics.selectionAsync();
-    Alert.alert('Bestands-Hinzufügen kommt in Sprint 13');
+    setIsInventoryModalVisible(true);
+  }
+
+  async function submitInventory(value: InventoryFormValue) {
+    if (!vintage) {
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert('Bestand konnte nicht gespeichert werden', 'Jahrgang fehlt.');
+      return;
+    }
+
+    try {
+      const matches = await findInventoryMatches(vintage.id);
+
+      if (matches.length > 0) {
+        setPendingInventoryValue(value);
+        setInventoryMatches(matches);
+        setIsInventoryModalVisible(false);
+        setIsInventoryDuplicateModalVisible(true);
+        return;
+      }
+
+      addInventoryMutation.mutate(value);
+    } catch (error: unknown) {
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert('Bestand konnte nicht geprüft werden', getErrorMessage(error));
+    }
+  }
+
+  function createNewInventoryItemFromDuplicate() {
+    if (!pendingInventoryValue) {
+      return;
+    }
+
+    addInventoryMutation.mutate(pendingInventoryValue);
   }
 
   async function openCorrectionModal() {
@@ -651,13 +799,24 @@ function WineDetailContent({
           isBusy={
             reassignVintageMutation.isPending ||
             deleteScanMutation.isPending ||
-            saveRatingMutation.isPending
+            saveRatingMutation.isPending ||
+            addInventoryMutation.isPending ||
+            increaseInventoryMutation.isPending
           }
           onCorrect={openCorrectionModal}
-          onInventory={showInventoryStub}
+          onInventory={openInventoryModal}
           onRate={openRatingModal}
         />
       </ScrollView>
+
+      <AddInventoryModal
+        initialValue={inventoryInitialValue}
+        isSaving={addInventoryMutation.isPending}
+        onClose={() => setIsInventoryModalVisible(false)}
+        onSubmit={submitInventory}
+        visible={isInventoryModalVisible}
+        wineTitle={buildTitle(detail)}
+      />
 
       <RatingModal
         initialValue={ratingInitialValue}
@@ -675,6 +834,18 @@ function WineDetailContent({
         onDelete={confirmDeleteScan}
         onOpenVintage={openVintageModal}
         visible={isCorrectionModalVisible}
+      />
+
+      <InventoryDuplicateModal
+        isSaving={
+          addInventoryMutation.isPending || increaseInventoryMutation.isPending
+        }
+        matches={inventoryMatches}
+        onCancel={() => setIsInventoryDuplicateModalVisible(false)}
+        onCreateNew={createNewInventoryItemFromDuplicate}
+        onIncrease={() => increaseInventoryMutation.mutate()}
+        pendingValue={pendingInventoryValue}
+        visible={isInventoryDuplicateModalVisible}
       />
 
       <VintageReassignModal
@@ -835,6 +1006,79 @@ function CorrectionModal({
           </View>
 
           <Pressable onPress={onCancel} style={styles.modalCancelButton}>
+            <Text style={styles.modalCancelText}>Abbrechen</Text>
+          </Pressable>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+function InventoryDuplicateModal({
+  isSaving,
+  matches,
+  onCancel,
+  onCreateNew,
+  onIncrease,
+  pendingValue,
+  visible,
+}: {
+  isSaving: boolean;
+  matches: InventoryRecord[];
+  onCancel: () => void;
+  onCreateNew: () => void;
+  onIncrease: () => void;
+  pendingValue: InventoryFormValue | null;
+  visible: boolean;
+}) {
+  const preferredMatch = pendingValue
+    ? findPreferredInventoryMatch(matches, pendingValue)
+    : null;
+  const locationLabel =
+    preferredMatch?.storage_location?.trim() || 'ohne Standort';
+
+  return (
+    <Modal
+      animationType="fade"
+      onRequestClose={onCancel}
+      transparent
+      visible={visible}
+    >
+      <View style={styles.modalRoot}>
+        <Pressable
+          accessibilityLabel="Bestandsauswahl schließen"
+          onPress={onCancel}
+          style={styles.modalBackdrop}
+        />
+        <View style={styles.bottomSheet}>
+          <View style={styles.modalHandle} />
+          <Text style={styles.modalTitle}>Schon im Bestand</Text>
+          <Text style={styles.modalDescription}>
+            Dieser Jahrgang liegt bereits in deinem Bestand. Erhöhe den Eintrag
+            {` ${locationLabel} `}oder lege einen neuen Standort an.
+          </Text>
+
+          <View style={styles.modalOptions}>
+            <ModalOption
+              icon="add-circle-outline"
+              isBusy={isSaving}
+              label="Menge erhöhen"
+              onPress={onIncrease}
+            />
+            <ModalOption
+              icon="albums-outline"
+              isBusy={isSaving}
+              label="Neuen Eintrag anlegen"
+              onPress={onCreateNew}
+            />
+          </View>
+
+          <Pressable
+            accessibilityRole="button"
+            disabled={isSaving}
+            onPress={onCancel}
+            style={styles.modalCancelButton}
+          >
             <Text style={styles.modalCancelText}>Abbrechen</Text>
           </Pressable>
         </View>

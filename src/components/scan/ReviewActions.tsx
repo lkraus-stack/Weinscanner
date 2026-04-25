@@ -45,7 +45,7 @@ export function ReviewActions({
         {isUploading ? (
           <ActivityIndicator color={colors.white} />
         ) : (
-          <Text style={styles.primaryButtonLabel}>Weiter</Text>
+          <Text style={styles.primaryButtonLabel}>Analysieren</Text>
         )}
       </Pressable>
     </View>

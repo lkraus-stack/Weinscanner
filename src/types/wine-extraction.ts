@@ -12,6 +12,8 @@ export type WineConfidence = {
 };
 
 export type MinimalWineExtraction = {
+  estimated_vintage_year: number | null;
+  estimated_vintage_year_reason: string | null;
   producer: string;
   wine_name: string;
   vintage_year: number | null;

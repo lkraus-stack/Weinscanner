@@ -21,7 +21,10 @@ import {
   EditWineModal,
   type WineEditData,
 } from '@/components/scan/EditWineModal';
-import { VintageYearPicker } from '@/components/scan/VintageYearPicker';
+import {
+  VintageYearPicker,
+  type VintageSuggestionKind,
+} from '@/components/scan/VintageYearPicker';
 import { WineDetailRow } from '@/components/scan/WineDetailRow';
 import { saveScan, scanWineFromLabel } from '@/lib/ai-client';
 import { useToastStore } from '@/stores/toast-store';
@@ -44,6 +47,17 @@ type DisplayRow = {
   label: string;
   value: string;
 };
+
+type AcceptedVintageSuggestion = {
+  kind: VintageSuggestionKind;
+  year: number;
+} | null;
+
+type VintageSuggestion = {
+  kind: VintageSuggestionKind;
+  reason: string | null;
+  year: number;
+} | null;
 
 const LOADING_MESSAGES = [
   'KI analysiert dein Etikett...',
@@ -207,10 +221,20 @@ function hasEnrichment(extraction: WineExtraction) {
   );
 }
 
-function needsBackLabelScan(extraction: WineExtraction) {
+function needsBackLabelScan(
+  extraction: WineExtraction,
+  scanResult: ScanWineResult | null
+) {
+  const visibleVintageYear =
+    scanResult?.minimal.vintage_year ??
+    (scanResult?.source === 'fresh' ? extraction.vintage_year : null);
+  const vintageConfidence =
+    scanResult?.minimal.confidence.vintage_year ??
+    extraction.confidence.vintage_year;
+
   return (
-    extraction.vintage_year === null ||
-    extraction.confidence.vintage_year < 0.5
+    visibleVintageYear === null ||
+    vintageConfidence < 0.5
   );
 }
 
@@ -256,10 +280,22 @@ function correctionValue(value: unknown) {
 
 function buildCorrections(
   original: WineExtraction | null,
-  current: WineExtraction
+  current: WineExtraction,
+  acceptedVintageSuggestion: AcceptedVintageSuggestion
 ): WineCorrection[] {
+  const vintageEstimateCorrection =
+    acceptedVintageSuggestion?.kind === 'estimated'
+      ? [
+          {
+            ai_value: `Geschätzt: ${acceptedVintageSuggestion.year}`,
+            field: 'vintage_year_estimate',
+            user_value: `Bestätigt: ${acceptedVintageSuggestion.year}`,
+          },
+        ]
+      : [];
+
   if (!original) {
-    return [];
+    return vintageEstimateCorrection;
   }
 
   const fields: (keyof WineEditData)[] = [
@@ -274,13 +310,15 @@ function buildCorrections(
     'alcohol_percent',
   ];
 
-  return fields
+  const fieldCorrections = fields
     .map((field) => ({
       ai_value: correctionValue(original[field]),
       field,
       user_value: correctionValue(current[field]),
     }))
     .filter((correction) => correction.ai_value !== correction.user_value);
+
+  return [...fieldCorrections, ...vintageEstimateCorrection];
 }
 
 function emptyExtractionFromMinimal(
@@ -303,6 +341,8 @@ function emptyExtractionFromMinimal(
     notes,
     price_max_eur: null,
     price_min_eur: null,
+    estimated_vintage_year: minimal.estimated_vintage_year,
+    estimated_vintage_year_reason: minimal.estimated_vintage_year_reason,
     producer: minimal.producer,
     region: null,
     serving_temperature: null,
@@ -336,6 +376,8 @@ function vintageToExtraction(
     notes: '',
     price_max_eur: numberOrNull(vintage?.price_max_eur),
     price_min_eur: numberOrNull(vintage?.price_min_eur),
+    estimated_vintage_year: result.minimal.estimated_vintage_year,
+    estimated_vintage_year_reason: result.minimal.estimated_vintage_year_reason,
     producer: result.wine.producer,
     region: result.wine.region,
     serving_temperature: vintage?.serving_temperature ?? null,
@@ -394,6 +436,39 @@ function getKnownYears(result: ScanWineResult | null) {
   return result.vintages
     .map((vintage) => vintage.vintage_year)
     .filter((year): year is number => typeof year === 'number');
+}
+
+function getVintageSuggestion(result: ScanWineResult | null): VintageSuggestion {
+  if (!result) {
+    return null;
+  }
+
+  if (typeof result.minimal.vintage_year === 'number') {
+    return {
+      kind: 'recognized',
+      reason: null,
+      year: result.minimal.vintage_year,
+    };
+  }
+
+  const freshEstimate =
+    result.source === 'fresh' ? result.extraction.estimated_vintage_year : null;
+  const freshReason =
+    result.source === 'fresh'
+      ? result.extraction.estimated_vintage_year_reason
+      : null;
+  const estimatedYear =
+    result.minimal.estimated_vintage_year ?? freshEstimate ?? null;
+
+  if (typeof estimatedYear !== 'number') {
+    return null;
+  }
+
+  return {
+    kind: 'estimated',
+    reason: result.minimal.estimated_vintage_year_reason ?? freshReason,
+    year: estimatedYear,
+  };
 }
 
 function getWineId(result: ScanWineResult | null) {
@@ -481,6 +556,8 @@ export default function ScanConfirmScreen() {
   const [selectedVintageYear, setSelectedVintageYear] = useState<number | null>(
     null
   );
+  const [acceptedVintageSuggestion, setAcceptedVintageSuggestion] =
+    useState<AcceptedVintageSuggestion>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isEditModalVisible, setIsEditModalVisible] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -518,6 +595,7 @@ export default function ScanConfirmScreen() {
         setOriginalExtraction(null);
         setScanResult(null);
         setSelectedVintageYear(null);
+        setAcceptedVintageSuggestion(null);
 
         const result = await scanWineFromLabel(signedUrl);
 
@@ -560,9 +638,20 @@ export default function ScanConfirmScreen() {
     [extraction]
   );
   const knownYears = useMemo(() => getKnownYears(scanResult), [scanResult]);
+  const vintageSuggestion = useMemo(
+    () => getVintageSuggestion(scanResult),
+    [scanResult]
+  );
   const corrections = useMemo(
-    () => (extraction ? buildCorrections(originalExtraction, extraction) : []),
-    [extraction, originalExtraction]
+    () =>
+      extraction
+        ? buildCorrections(
+            originalExtraction,
+            extraction,
+            acceptedVintageSuggestion
+          )
+        : [],
+    [acceptedVintageSuggestion, extraction, originalExtraction]
   );
   const canSave = Boolean(
     selectedVintageYear !== null &&
@@ -596,6 +685,19 @@ export default function ScanConfirmScreen() {
         : currentExtraction
     );
     setIsEditModalVisible(false);
+  }
+
+  function changeVintageYear(vintageYear: number | null) {
+    setSelectedVintageYear(vintageYear);
+    setAcceptedVintageSuggestion(null);
+  }
+
+  function acceptVintageSuggestion(
+    vintageYear: number,
+    kind: VintageSuggestionKind
+  ) {
+    setSelectedVintageYear(vintageYear);
+    setAcceptedVintageSuggestion({ kind, year: vintageYear });
   }
 
   async function saveConfirmedScan() {
@@ -723,13 +825,16 @@ export default function ScanConfirmScreen() {
             <Section title="Jahrgang">
               <VintageYearPicker
                 knownYears={knownYears}
-                onChange={setSelectedVintageYear}
-                suggestedYear={scanResult?.minimal.vintage_year ?? null}
+                onAcceptSuggestion={acceptVintageSuggestion}
+                onChange={changeVintageYear}
+                suggestionKind={vintageSuggestion?.kind}
+                suggestionReason={vintageSuggestion?.reason}
+                suggestedYear={vintageSuggestion?.year ?? null}
                 value={selectedVintageYear}
               />
             </Section>
 
-            {needsBackLabelScan(extraction) ? (
+            {needsBackLabelScan(extraction, scanResult) ? (
               <View style={styles.vintageWarningCard}>
                 <View style={styles.vintageWarningHeader}>
                   <Ionicons
@@ -740,9 +845,9 @@ export default function ScanConfirmScreen() {
                   <Text style={styles.vintageWarningTitle}>Jahrgang fehlt</Text>
                 </View>
                 <Text style={styles.vintageWarningText}>
-                  Auf dem vorderen Etikett ist kein Jahrgang sichtbar. Scanne
-                  bitte das Rücketikett oder die Kapsel, damit wir später den
-                  richtigen Jahrgang speichern können.
+                  Auf dem vorderen Etikett ist kein Jahrgang sicher sichtbar.
+                  Du kannst eine Schätzung bestätigen, manuell ein Jahr wählen
+                  oder das Rücketikett für mehr Sicherheit scannen.
                 </Text>
                 <Pressable
                   onPress={scanBackLabel}

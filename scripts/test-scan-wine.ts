@@ -3,8 +3,10 @@ import {
   type SupabaseClient,
   type User,
 } from '@supabase/supabase-js';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { basename, extname, join, resolve } from 'node:path';
 
 import { uploadBuffer } from '../src/lib/storage';
 
@@ -20,6 +22,8 @@ type TestEnv = {
   SCAN_WINE_TEST_EMAIL: string;
   SCAN_WINE_TEST_PASSWORD: string;
   SCAN_WINE_PRIMARY_IMAGE_PATH?: string;
+  SCAN_WINE_NO_VINTAGE_IMAGE_PATH?: string;
+  SCAN_WINE_NO_VINTAGE_IMAGE_URL?: string;
   SCAN_WINE_SECOND_IMAGE_PATH?: string;
   SCAN_WINE_SECOND_IMAGE_URL?: string;
   SCAN_WINE_CLEANUP_TERMS?: string;
@@ -30,6 +34,13 @@ type TestEnv = {
 };
 
 type ScanWineResult = {
+  minimal?: {
+    estimated_vintage_year?: number | null;
+    estimated_vintage_year_reason?: string | null;
+    producer?: string;
+    vintage_year?: number | null;
+    wine_name?: string;
+  };
   source: 'cache' | 'fresh' | 'low_confidence';
   wine?: { id?: string; producer?: string; wine_name?: string };
 };
@@ -130,6 +141,14 @@ function getSecondImagePath(env: TestEnv) {
   return env.SCAN_WINE_SECOND_IMAGE_PATH;
 }
 
+function getNoVintageImageUrl(env: TestEnv) {
+  return env.SCAN_WINE_NO_VINTAGE_IMAGE_URL;
+}
+
+function getNoVintageImagePath(env: TestEnv) {
+  return env.SCAN_WINE_NO_VINTAGE_IMAGE_PATH;
+}
+
 function getCleanupTerms(env: TestEnv) {
   return (
     env.SCAN_WINE_CLEANUP_TERMS?.split(',')
@@ -143,6 +162,34 @@ function toArrayBuffer(buffer: Buffer): ArrayBuffer {
     buffer.byteOffset,
     buffer.byteOffset + buffer.byteLength
   ) as ArrayBuffer;
+}
+
+function readLocalImageAsJpegBuffer(localImagePath: string) {
+  const extension = extname(localImagePath).toLowerCase();
+
+  if (extension === '.jpg' || extension === '.jpeg') {
+    return readFileSync(localImagePath);
+  }
+
+  const tempDir = mkdtempSync(join(tmpdir(), 'wine-scan-test-'));
+  const outputPath = join(tempDir, `${basename(localImagePath, extension)}.jpg`);
+
+  try {
+    execFileSync(
+      'sips',
+      ['-s', 'format', 'jpeg', localImagePath, '--out', outputPath],
+      {
+        stdio: 'ignore',
+      }
+    );
+
+    return readFileSync(outputPath);
+  } finally {
+    rmSync(tempDir, {
+      force: true,
+      recursive: true,
+    });
+  }
 }
 
 async function findUserByEmail(
@@ -274,7 +321,7 @@ async function prepareLocalImageUrl(
   prefix: string
 ) {
   const localImagePath = resolve(process.cwd(), imagePath);
-  const imageBuffer = readFileSync(localImagePath);
+  const imageBuffer = readLocalImageAsJpegBuffer(localImagePath);
   const uploadResult = await uploadBuffer(
     userId,
     toArrayBuffer(imageBuffer),
@@ -468,6 +515,56 @@ async function runScanWineTest() {
 
     if (!thirdIsFresh) {
       throw new Error(`Anderer Wein war ${thirdResult.source}, erwartet fresh.`);
+    }
+
+    let noVintageUrl = getNoVintageImageUrl(env) ?? '';
+    const noVintageImagePath = getNoVintageImagePath(env);
+
+    if (noVintageImagePath) {
+      const noVintageImage = await prepareLocalImageUrl(
+        testUser.id,
+        anonClient,
+        noVintageImagePath,
+        'scan-cache-no-vintage'
+      );
+      uploadedStoragePaths.push(noVintageImage.storagePath);
+      noVintageUrl = noVintageImage.signedUrl;
+    }
+
+    if (noVintageUrl) {
+      const noVintageResult = await invokeScanWine(
+        env,
+        signInData.session.access_token,
+        noVintageUrl
+      );
+      const minimal = noVintageResult.minimal;
+      const hasEstimateOrCleanFallback =
+        Boolean(minimal) &&
+        minimal?.vintage_year === null &&
+        (typeof minimal?.estimated_vintage_year === 'number' ||
+          minimal?.estimated_vintage_year === null);
+
+      if (noVintageResult.wine?.id) {
+        insertedWineIds.push(noVintageResult.wine.id);
+      }
+
+      record(
+        steps,
+        'Bild ohne sichtbaren Jahrgang liefert Schätzung oder null-Fallback',
+        hasEstimateOrCleanFallback
+      );
+
+      if (!hasEstimateOrCleanFallback) {
+        throw new Error(
+          'No-vintage-Test hat keinen sauberen estimated_vintage_year-Fallback geliefert.'
+        );
+      }
+
+      console.log('Kein sichtbarer Jahrgang:', JSON.stringify(noVintageResult, null, 2));
+    } else {
+      console.log(
+        'No-vintage-Schätzungstest übersprungen. Setze SCAN_WINE_NO_VINTAGE_IMAGE_PATH oder SCAN_WINE_NO_VINTAGE_IMAGE_URL in .env.test.'
+      );
     }
 
     console.log('Erster Lauf:', JSON.stringify(firstResult, null, 2));

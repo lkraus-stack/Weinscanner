@@ -5,11 +5,14 @@ Extrahiere strukturierte Daten aus dem Wein-Etikett im Bild und reichere den Dat
 
 WICHTIGE REGELN:
 1. Antworte AUSSCHLIESSLICH im JSON-Format. Kein Fließtext, kein Markdown, keine Codeblock-Marker.
-2. Wenn ein Feld nicht erkennbar ist, setze null. Niemals raten.
+2. Wenn ein Feld nicht erkennbar ist, setze null. Niemals raten, außer beim ausdrücklich getrennten Feld estimated_vintage_year.
 3. Bei der Jahrgangs-Erkennung sei besonders vorsichtig:
    - Vintage-Jahre stehen oft auf dem vorderen Etikett
    - Manchmal nur auf dem hinteren Etikett oder dem Korken
-   - Wenn unsicher: vintage_year auf null setzen, confidence.vintage_year auf 0
+   - vintage_year darf nur gesetzt werden, wenn der Jahrgang im Bild sichtbar und verlässlich lesbar ist
+   - Wenn unsicher oder nicht sichtbar: vintage_year auf null setzen, confidence.vintage_year auf 0
+   - Wenn der Wein eindeutig identifiziert ist, darfst du zusätzlich einen plausiblen estimated_vintage_year schätzen und in estimated_vintage_year_reason kurz begründen
+   - Eine Schätzung gehört NIEMALS in vintage_year
 4. confidence-Werte zwischen 0.0 und 1.0:
    - 0.9-1.0: Klar lesbar und eindeutig
    - 0.7-0.89: Lesbar, kleine Unsicherheit
@@ -27,12 +30,15 @@ WICHTIGE REGELN:
 14. Bei confidence.overall < 0.7: lasse Anreicherungs-Felder null und Listen leer.
 15. aromas enthält maximal 8 kurze deutsche Aromabegriffe.
 16. data_sources enthält nur konkrete URLs, wenn du Web-Search oder externe Quellen tatsächlich genutzt hast. Sonst [].
+17. Gib estimated_vintage_year und estimated_vintage_year_reason IMMER als Keys aus. Wenn keine plausible Schätzung möglich ist: beide null.
 
 OUTPUT-SCHEMA:
 {
   "producer": "string",
   "wine_name": "string",
   "vintage_year": number | null,
+  "estimated_vintage_year": number | null,
+  "estimated_vintage_year_reason": "string | null",
   "region": "string | null",
   "country": "string | null",
   "appellation": "string | null",
@@ -72,13 +78,20 @@ WICHTIGE REGELN:
 3. wine_name ist die spezifische Linie, Lage oder Cuvée, zum Beispiel "Le Creete", "Reserva", "Kiedrich Gräfenberg".
 4. Wenn auf dem Etikett nur ein Name steht, zum Beispiel bei einigen Bordeaux-Châteaux, darf producer und wine_name identisch sein.
 5. Wenn der Jahrgang nicht sicher sichtbar ist, setze vintage_year auf null und confidence.vintage_year auf 0.
-6. Niemals raten.
+6. Eine sichtbare Erkennung und eine Schätzung müssen getrennt bleiben:
+   - vintage_year ist nur für sichtbar und verlässlich gelesene Jahrgänge.
+   - estimated_vintage_year darf eine plausible Schätzung sein, wenn producer und wine_name sicher erkannt wurden.
+   - estimated_vintage_year_reason erklärt kurz, warum diese Schätzung plausibel ist.
+   - Eine Schätzung gehört NIEMALS in vintage_year.
+   - Gib estimated_vintage_year und estimated_vintage_year_reason IMMER als Keys aus. Wenn keine plausible Schätzung möglich ist: beide null.
 
 OUTPUT-SCHEMA:
 {
   "producer": "string",
   "wine_name": "string",
   "vintage_year": number | null,
+  "estimated_vintage_year": number | null,
+  "estimated_vintage_year_reason": "string | null",
   "confidence": {
     "producer": number,
     "wine_name": number,

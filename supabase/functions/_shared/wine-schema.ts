@@ -10,6 +10,8 @@ export type Confidence = {
 };
 
 export type MinimalWineExtraction = {
+  estimated_vintage_year: number | null;
+  estimated_vintage_year_reason: string | null;
   producer: string;
   wine_name: string;
   vintage_year: number | null;
@@ -185,11 +187,21 @@ export function validateMinimalWineExtraction(
     throw new Error('Vantero-Antwort ist kein Objekt.');
   }
 
+  const vintageYear = integerYearOrNull(value.vintage_year);
+  const parsedConfidence = parseConfidence(value.confidence);
+
   return {
+    estimated_vintage_year: integerYearOrNull(value.estimated_vintage_year),
+    estimated_vintage_year_reason: stringOrNull(
+      value.estimated_vintage_year_reason
+    ),
     producer: requiredString(value.producer, ''),
     wine_name: requiredString(value.wine_name, ''),
-    vintage_year: integerYearOrNull(value.vintage_year),
-    confidence: parseConfidence(value.confidence),
+    vintage_year: vintageYear,
+    confidence: {
+      ...parsedConfidence,
+      vintage_year: vintageYear === null ? 0 : parsedConfidence.vintage_year,
+    },
   };
 }
 

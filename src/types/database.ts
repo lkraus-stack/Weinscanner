@@ -97,7 +97,7 @@ export type Database = {
           purchased_at?: string | null
           quantity?: number | null
           storage_location?: string | null
-          user_id: string
+          user_id?: string
           vintage_id: string
         }
         Update: {
@@ -367,6 +367,20 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      decrement_inventory_quantity: {
+        Args: { item_id: string }
+        Returns: {
+          created_at: string
+          id: string
+          notes: string | null
+          purchase_price: number | null
+          purchased_at: string | null
+          quantity: number | null
+          storage_location: string | null
+          user_id: string
+          vintage_id: string
+        }
+      }
       get_user_scan_history: {
         Args: {
           page_limit?: number

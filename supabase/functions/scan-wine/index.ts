@@ -19,7 +19,7 @@ import {
 } from '../_shared/wine-schema.ts';
 
 const LOW_CONFIDENCE_THRESHOLD = 0.4;
-const PIPELINE_TIMEOUT_MS = 45_000;
+const PIPELINE_TIMEOUT_MS = 90_000;
 
 type SupabaseServiceClient = ReturnType<typeof createServiceClient>;
 

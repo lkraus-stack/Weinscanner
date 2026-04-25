@@ -10,7 +10,7 @@ import {
 import { extractWineFull } from '../_shared/wine-analysis.ts';
 import { validateExtractWineRequest } from '../_shared/wine-schema.ts';
 
-const VANTERO_TIMEOUT_MS = 30_000;
+const VANTERO_TIMEOUT_MS = 60_000;
 
 serve(async (req) => {
   const corsResponse = handleCors(req);
