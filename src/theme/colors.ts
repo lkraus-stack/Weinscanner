@@ -12,6 +12,7 @@ export const colors = {
   success: '#2E7D32',
   warning: '#F57C00',
   error: '#C62828',
+  overlay: 'rgba(26, 26, 26, 0.34)',
   white: '#FFFFFF',
   wineWhite: '#F4E4A8',
   wineRed: '#722F37',

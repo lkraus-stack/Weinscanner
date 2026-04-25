@@ -1,0 +1,194 @@
+import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+
+import type { HistoryItemRecord, WineColor } from '@/hooks/useHistory';
+import { colors } from '@/theme/colors';
+import { radii, spacing } from '@/theme/spacing';
+import { typography } from '@/theme/typography';
+
+const COLOR_LABELS: Record<WineColor, string> = {
+  rose: 'Rosé',
+  rot: 'Rot',
+  schaum: 'Schaum',
+  suess: 'Süß',
+  weiss: 'Weiß',
+};
+
+const COLOR_SWATCHES: Record<WineColor, string> = {
+  rose: colors.wineRose,
+  rot: colors.wineRed,
+  schaum: colors.wineSparkling,
+  suess: colors.warning,
+  weiss: colors.wineWhite,
+};
+
+type Props = {
+  item: HistoryItemRecord;
+  onPress: (item: HistoryItemRecord) => void;
+};
+
+function joinMeta(parts: (string | null | undefined)[]) {
+  return parts.filter(Boolean).join(', ');
+}
+
+export function HistoryItem({ item, onPress }: Props) {
+  const regionLine = joinMeta([item.region, item.country]);
+  const colorLabel = item.wineColor ? COLOR_LABELS[item.wineColor] : 'Unklar';
+  const swatchColor = item.wineColor
+    ? COLOR_SWATCHES[item.wineColor]
+    : colors.border;
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPress={() => onPress(item)}
+      style={({ pressed }) => [
+        styles.card,
+        pressed && styles.pressed,
+      ]}
+    >
+      <View style={styles.thumbnailFrame}>
+        {item.labelImageUrl ? (
+          <Image
+            source={{ uri: item.labelImageUrl }}
+            style={styles.thumbnail}
+            contentFit="cover"
+            cachePolicy="memory-disk"
+          />
+        ) : (
+          <Ionicons name="wine-outline" size={28} color={colors.primaryDark} />
+        )}
+      </View>
+
+      <View style={styles.content}>
+        <View style={styles.titleRow}>
+          <Text style={styles.title} numberOfLines={2}>
+            {item.producer} {item.wineName}
+          </Text>
+          <Text style={styles.year}>{item.vintageYear}</Text>
+        </View>
+
+        {regionLine ? (
+          <Text style={styles.meta} numberOfLines={1}>
+            {regionLine}
+          </Text>
+        ) : null}
+
+        {item.grapeVariety ? (
+          <Text style={styles.meta} numberOfLines={1}>
+            {item.grapeVariety}
+          </Text>
+        ) : null}
+
+        <View style={styles.footer}>
+          <View style={styles.colorPill}>
+            <View
+              style={[
+                styles.swatch,
+                { backgroundColor: swatchColor },
+              ]}
+            />
+            <Text style={styles.colorLabel}>{colorLabel}</Text>
+          </View>
+          <Ionicons
+            name="chevron-forward"
+            size={18}
+            color={colors.textSecondary}
+          />
+        </View>
+      </View>
+    </Pressable>
+  );
+}
+
+const styles = StyleSheet.create({
+  card: {
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: spacing.md,
+    marginHorizontal: spacing.screenX,
+    marginBottom: spacing.md,
+    padding: spacing.md,
+  },
+  colorLabel: {
+    color: colors.textSecondary,
+    fontSize: typography.size.xs,
+    fontWeight: typography.weight.bold,
+  },
+  colorPill: {
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    backgroundColor: colors.surfaceWarm,
+    borderColor: colors.border,
+    borderRadius: radii.pill,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+  },
+  content: {
+    flex: 1,
+    gap: spacing.xs,
+    minWidth: 0,
+  },
+  footer: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: spacing.xs,
+  },
+  meta: {
+    color: colors.textSecondary,
+    fontSize: typography.size.sm,
+    fontWeight: typography.weight.medium,
+    lineHeight: typography.lineHeight.sm,
+  },
+  pressed: {
+    opacity: 0.78,
+  },
+  swatch: {
+    borderColor: colors.border,
+    borderRadius: radii.pill,
+    borderWidth: 1,
+    height: 10,
+    width: 10,
+  },
+  thumbnail: {
+    height: '100%',
+    width: '100%',
+  },
+  thumbnailFrame: {
+    alignItems: 'center',
+    backgroundColor: colors.surfaceWarm,
+    borderColor: colors.border,
+    borderRadius: radii.sm,
+    borderWidth: 1,
+    height: 80,
+    justifyContent: 'center',
+    overflow: 'hidden',
+    width: 80,
+  },
+  title: {
+    color: colors.text,
+    flex: 1,
+    fontSize: typography.size.base,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.base,
+  },
+  titleRow: {
+    alignItems: 'flex-start',
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  year: {
+    color: colors.primaryDark,
+    fontSize: typography.size.lg,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.lg,
+  },
+});

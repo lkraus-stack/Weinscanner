@@ -1,0 +1,1385 @@
+import { Ionicons } from '@expo/vector-icons';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { Image } from 'expo-image';
+import * as Haptics from 'expo-haptics';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useEffect, useMemo, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+import { VintageYearPicker } from '@/components/scan/VintageYearPicker';
+import { AromaGrid } from '@/components/wine-detail/AromaGrid';
+import {
+  type ScanDetail,
+  type ScanDetailRating,
+  useScanDetail,
+} from '@/hooks/useScanDetail';
+import { useWineVintages } from '@/hooks/useWineVintages';
+import { supabase } from '@/lib/supabase';
+import { colors } from '@/theme/colors';
+import { radii, spacing } from '@/theme/spacing';
+import { typography } from '@/theme/typography';
+
+type InfoItem = {
+  label: string;
+  value: string;
+};
+
+const DATE_FORMATTER = new Intl.DateTimeFormat('de-DE', {
+  day: '2-digit',
+  month: 'short',
+  year: 'numeric',
+});
+
+function getErrorMessage(error: unknown) {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+
+  return 'Bitte versuche es noch einmal.';
+}
+
+function normalizeParam(value: string | string[] | undefined) {
+  if (Array.isArray(value)) {
+    return value[0];
+  }
+
+  return value;
+}
+
+function valueOrUnavailable(value: string | number | null | undefined) {
+  if (value === null || value === undefined || value === '') {
+    return 'Nicht verfügbar';
+  }
+
+  return String(value);
+}
+
+function hasText(value: string | null | undefined) {
+  return Boolean(value?.trim());
+}
+
+function joinMeta(parts: (string | null | undefined)[]) {
+  const values = parts.filter((part): part is string => Boolean(part));
+
+  return values.length > 0 ? values.join(', ') : 'Nicht verfügbar';
+}
+
+function isRemoteUrl(value: string) {
+  return value.startsWith('http://') || value.startsWith('https://');
+}
+
+function formatWineLabel(value: string | null | undefined) {
+  if (!value) {
+    return 'Nicht verfügbar';
+  }
+
+  if (value === 'suess') {
+    return 'Süß';
+  }
+
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+function formatYearRange(start: number | null, end: number | null) {
+  if (typeof start === 'number' && typeof end === 'number') {
+    return `${start}-${end}`;
+  }
+
+  if (typeof start === 'number') {
+    return `ab ${start}`;
+  }
+
+  if (typeof end === 'number') {
+    return `bis ${end}`;
+  }
+
+  return 'Nicht verfügbar';
+}
+
+function formatCurrency(value: number) {
+  return value.toLocaleString('de-DE', {
+    maximumFractionDigits: 0,
+    minimumFractionDigits: 0,
+  });
+}
+
+function formatPrice(min: number | null, max: number | null) {
+  if (typeof min === 'number' && typeof max === 'number') {
+    return `${formatCurrency(min)}-${formatCurrency(max)} €`;
+  }
+
+  if (typeof min === 'number') {
+    return `ab ${formatCurrency(min)} €`;
+  }
+
+  if (typeof max === 'number') {
+    return `bis ${formatCurrency(max)} €`;
+  }
+
+  return 'Nicht verfügbar';
+}
+
+function formatAlcohol(value: number | null) {
+  if (typeof value !== 'number') {
+    return 'Nicht verfügbar';
+  }
+
+  return `${value.toLocaleString('de-DE', {
+    maximumFractionDigits: 1,
+    minimumFractionDigits: Number.isInteger(value) ? 0 : 1,
+  })} %`;
+}
+
+function formatDate(value: string | null) {
+  if (!value) {
+    return null;
+  }
+
+  return DATE_FORMATTER.format(new Date(value));
+}
+
+function buildTitle(detail: ScanDetail) {
+  const vintage = detail.vintage;
+  const wine = vintage?.wine;
+
+  if (!vintage || !wine) {
+    return 'Wein nicht verfügbar';
+  }
+
+  const baseTitle =
+    wine.producer === wine.wine_name
+      ? wine.producer
+      : `${wine.producer} ${wine.wine_name}`;
+
+  return `${baseTitle}, ${vintage.vintage_year}`;
+}
+
+function buildInfoItems(detail: ScanDetail): InfoItem[] {
+  const vintage = detail.vintage;
+  const wine = vintage?.wine;
+
+  return [
+    { label: 'Weingut', value: valueOrUnavailable(wine?.producer) },
+    { label: 'Geschmack', value: formatWineLabel(wine?.taste_dryness) },
+    { label: 'Rebsorte', value: valueOrUnavailable(wine?.grape_variety) },
+    { label: 'Land', value: valueOrUnavailable(wine?.country) },
+    { label: 'Region', value: valueOrUnavailable(wine?.region) },
+    { label: 'Lage', value: joinMeta([wine?.sub_region, wine?.appellation]) },
+    {
+      label: 'Trinkfenster',
+      value: vintage
+        ? formatYearRange(
+            vintage.drinking_window_start,
+            vintage.drinking_window_end
+          )
+        : 'Nicht verfügbar',
+    },
+    {
+      label: 'Preis',
+      value: vintage
+        ? formatPrice(vintage.price_min_eur, vintage.price_max_eur)
+        : 'Nicht verfügbar',
+    },
+    {
+      label: 'Alkohol',
+      value: vintage ? formatAlcohol(vintage.alcohol_percent) : 'Nicht verfügbar',
+    },
+  ];
+}
+
+function getVisibleRating(ratings: ScanDetailRating[]) {
+  return (
+    ratings.find((rating) => typeof rating.stars === 'number') ??
+    ratings[0] ??
+    null
+  );
+}
+
+async function reassignScanVintage({
+  scanId,
+  targetVintageYear,
+}: {
+  scanId: string;
+  targetVintageYear: number;
+}) {
+  const { error } = await supabase.rpc('reassign_scan_vintage', {
+    scan_id: scanId,
+    target_vintage_year: targetVintageYear,
+  });
+
+  if (error) {
+    throw error;
+  }
+}
+
+async function deleteScan(detail: ScanDetail) {
+  const { error: ratingsError } = await supabase
+    .from('ratings')
+    .update({ scan_id: null })
+    .eq('scan_id', detail.id);
+
+  if (ratingsError) {
+    throw ratingsError;
+  }
+
+  const { error: scanError } = await supabase
+    .from('scans')
+    .delete()
+    .eq('id', detail.id);
+
+  if (scanError) {
+    throw scanError;
+  }
+
+  const storagePaths = [detail.labelImagePath, detail.bottleImagePath].filter(
+    (path): path is string => Boolean(path && !isRemoteUrl(path))
+  );
+
+  if (storagePaths.length === 0) {
+    return;
+  }
+
+  const { error: storageError } = await supabase.storage
+    .from('wine-labels')
+    .remove(storagePaths);
+
+  if (storageError) {
+    console.warn('Storage-Cleanup fuer geloeschten Scan fehlgeschlagen:', storageError.message);
+  }
+}
+
+export default function WineDetailScreen() {
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const params = useLocalSearchParams<{ scanId?: string }>();
+  const scanId = normalizeParam(params.scanId);
+  const scanDetailQuery = useScanDetail(scanId);
+
+  return (
+    <View style={styles.screen}>
+      <DetailHeader insetTop={insets.top} onBack={() => router.back()} />
+
+      {!scanId ? (
+        <CenterState
+          description="Diese Detailansicht wurde ohne Scan-ID geöffnet."
+          icon="alert-circle-outline"
+          title="Scan fehlt"
+        />
+      ) : null}
+
+      {scanId && scanDetailQuery.isLoading ? (
+        <View style={styles.loadingState}>
+          <ActivityIndicator color={colors.primary} size="large" />
+          <Text style={styles.loadingText}>Weindaten werden geladen...</Text>
+        </View>
+      ) : null}
+
+      {scanId && scanDetailQuery.isError ? (
+        <CenterState
+          ctaLabel="Erneut versuchen"
+          description={
+            scanDetailQuery.error.message ||
+            'Die Detaildaten konnten nicht geladen werden.'
+          }
+          icon="warning-outline"
+          onPress={() => scanDetailQuery.refetch()}
+          title="Detail konnte nicht geladen werden"
+        />
+      ) : null}
+
+      {scanId && scanDetailQuery.data && !scanDetailQuery.data.vintage ? (
+        <CenterState
+          description="Dieser Scan ist noch keinem Jahrgang zugeordnet."
+          icon="wine-outline"
+          title="Keine Weindaten gefunden"
+        />
+      ) : null}
+
+      {scanId && scanDetailQuery.data?.vintage ? (
+        <WineDetailContent
+          detail={scanDetailQuery.data}
+          paddingBottom={insets.bottom + 120}
+        />
+      ) : null}
+    </View>
+  );
+}
+
+function DetailHeader({
+  insetTop,
+  onBack,
+}: {
+  insetTop: number;
+  onBack: () => void;
+}) {
+  return (
+    <View style={[styles.header, { paddingTop: insetTop + spacing.sm }]}>
+      <Pressable
+        accessibilityLabel="Zurück"
+        accessibilityRole="button"
+        onPress={onBack}
+        style={styles.headerButton}
+      >
+        <Ionicons name="chevron-back" size={24} color={colors.text} />
+      </Pressable>
+
+      <View style={styles.headerActions} pointerEvents="none">
+        <View style={styles.headerButton}>
+          <Ionicons name="heart-outline" size={22} color={colors.text} />
+        </View>
+        <View style={styles.headerButton}>
+          <Ionicons name="ellipsis-horizontal" size={22} color={colors.text} />
+        </View>
+      </View>
+    </View>
+  );
+}
+
+function WineDetailContent({
+  detail,
+  paddingBottom,
+}: {
+  detail: ScanDetail;
+  paddingBottom: number;
+}) {
+  const queryClient = useQueryClient();
+  const router = useRouter();
+  const imageUrl = detail.labelImageUrl ?? detail.bottleImageUrl;
+  const rating = getVisibleRating(detail.ratings);
+  const vintage = detail.vintage;
+  const wineId = vintage?.wine_id ?? null;
+  const currentVintageYear = vintage?.vintage_year ?? null;
+  const vintagesQuery = useWineVintages(wineId);
+  const knownYears = useMemo(
+    () => vintagesQuery.data?.map((option) => option.vintage_year) ?? [],
+    [vintagesQuery.data]
+  );
+  const [isCorrectionModalVisible, setIsCorrectionModalVisible] =
+    useState(false);
+  const [isVintageModalVisible, setIsVintageModalVisible] = useState(false);
+  const [selectedVintageYear, setSelectedVintageYear] = useState<number | null>(
+    currentVintageYear
+  );
+  const hasDescription = Boolean(
+    hasText(vintage?.description_short) || hasText(vintage?.description_long)
+  );
+  const hasRecommendation = Boolean(
+    hasText(vintage?.serving_temperature) || hasText(vintage?.food_pairing)
+  );
+
+  useEffect(() => {
+    if (isVintageModalVisible) {
+      setSelectedVintageYear(currentVintageYear);
+    }
+  }, [currentVintageYear, isVintageModalVisible]);
+
+  const reassignVintageMutation = useMutation({
+    mutationFn: (targetVintageYear: number) =>
+      reassignScanVintage({
+        scanId: detail.id,
+        targetVintageYear,
+      }),
+    onError: async (error: unknown) => {
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert('Jahrgang konnte nicht geändert werden', getErrorMessage(error));
+    },
+    onSuccess: async () => {
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setIsVintageModalVisible(false);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['scan-detail', detail.id] }),
+        queryClient.invalidateQueries({ queryKey: ['history'] }),
+        queryClient.invalidateQueries({ queryKey: ['wine-vintages', wineId] }),
+      ]);
+    },
+  });
+
+  const deleteScanMutation = useMutation({
+    mutationFn: () => deleteScan(detail),
+    onError: async (error: unknown) => {
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert('Scan konnte nicht gelöscht werden', getErrorMessage(error));
+    },
+    onSuccess: async () => {
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      await queryClient.invalidateQueries({ queryKey: ['history'] });
+      router.replace('/(app)');
+    },
+  });
+
+  async function showRatingStub() {
+    await Haptics.selectionAsync();
+    Alert.alert('Bewertungs-Modal kommt in Sprint 12');
+  }
+
+  async function showInventoryStub() {
+    await Haptics.selectionAsync();
+    Alert.alert('Bestands-Hinzufügen kommt in Sprint 13');
+  }
+
+  async function openCorrectionModal() {
+    await Haptics.selectionAsync();
+    setIsCorrectionModalVisible(true);
+  }
+
+  async function openVintageModal() {
+    await Haptics.selectionAsync();
+    setIsCorrectionModalVisible(false);
+    setSelectedVintageYear(currentVintageYear);
+    setIsVintageModalVisible(true);
+  }
+
+  function confirmDeleteScan() {
+    setIsCorrectionModalVisible(false);
+    Alert.alert(
+      'Scan löschen?',
+      'Der Scan wird aus deinem Verlauf entfernt. Wein und Jahrgang bleiben erhalten.',
+      [
+        { text: 'Abbrechen', style: 'cancel' },
+        {
+          onPress: () => deleteScanMutation.mutate(),
+          style: 'destructive',
+          text: 'Scan löschen',
+        },
+      ]
+    );
+  }
+
+  function saveVintageReassignment() {
+    if (!selectedVintageYear) {
+      return;
+    }
+
+    if (selectedVintageYear === currentVintageYear) {
+      setIsVintageModalVisible(false);
+      return;
+    }
+
+    reassignVintageMutation.mutate(selectedVintageYear);
+  }
+
+  return (
+    <>
+      <ScrollView
+        contentContainerStyle={[styles.content, { paddingBottom }]}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.photoFrame}>
+          {imageUrl ? (
+            <Image
+              cachePolicy="memory-disk"
+              contentFit="cover"
+              source={{ uri: imageUrl }}
+              style={styles.photo}
+              transition={160}
+            />
+          ) : (
+            <View style={styles.photoPlaceholder}>
+              <Ionicons name="wine-outline" size={42} color={colors.primaryDark} />
+            </View>
+          )}
+        </View>
+
+        <View style={styles.summary}>
+          <Text style={styles.title}>{buildTitle(detail)}</Text>
+          {rating ? <RatingSummary rating={rating} /> : null}
+        </View>
+
+        <Section title="Wein-Info">
+          <InfoGrid items={buildInfoItems(detail)} />
+        </Section>
+
+        {vintage?.aromas.length ? (
+          <Section title="Aromen">
+            <AromaGrid aromas={vintage.aromas} />
+          </Section>
+        ) : null}
+
+        {hasDescription ? (
+          <Section title="Beschreibung">
+            <View style={styles.descriptionPanel}>
+              {hasText(vintage?.description_short) ? (
+                <Text style={styles.descriptionLead}>
+                  {vintage?.description_short}
+                </Text>
+              ) : null}
+              {hasText(vintage?.description_long) ? (
+                <Text style={styles.descriptionBody}>
+                  {vintage?.description_long}
+                </Text>
+              ) : null}
+            </View>
+          </Section>
+        ) : null}
+
+        {hasRecommendation ? (
+          <Section title="Genuss-Empfehlung">
+            <View style={styles.recommendationPanel}>
+              {hasText(vintage?.serving_temperature) ? (
+                <RecommendationRow
+                  icon="thermometer-outline"
+                  label="Serviertemperatur"
+                  value={vintage?.serving_temperature ?? ''}
+                />
+              ) : null}
+              {hasText(vintage?.food_pairing) ? (
+                <RecommendationRow
+                  icon="restaurant-outline"
+                  label="Passt zu"
+                  value={vintage?.food_pairing ?? ''}
+                />
+              ) : null}
+            </View>
+          </Section>
+        ) : null}
+
+        {hasText(vintage?.vinification) ? (
+          <Section title="Weinherstellung">
+            <View style={styles.descriptionPanel}>
+              <Text style={styles.descriptionBody}>{vintage?.vinification}</Text>
+            </View>
+          </Section>
+        ) : null}
+
+        <DetailActions
+          isBusy={
+            reassignVintageMutation.isPending || deleteScanMutation.isPending
+          }
+          onCorrect={openCorrectionModal}
+          onInventory={showInventoryStub}
+          onRate={showRatingStub}
+        />
+      </ScrollView>
+
+      <CorrectionModal
+        isDeleting={deleteScanMutation.isPending}
+        onCancel={() => setIsCorrectionModalVisible(false)}
+        onDelete={confirmDeleteScan}
+        onOpenVintage={openVintageModal}
+        visible={isCorrectionModalVisible}
+      />
+
+      <VintageReassignModal
+        currentVintageYear={currentVintageYear}
+        isLoadingYears={vintagesQuery.isLoading}
+        isSaving={reassignVintageMutation.isPending}
+        knownYears={knownYears}
+        onCancel={() => setIsVintageModalVisible(false)}
+        onChange={setSelectedVintageYear}
+        onSave={saveVintageReassignment}
+        value={selectedVintageYear}
+        visible={isVintageModalVisible}
+      />
+    </>
+  );
+}
+
+function RatingSummary({ rating }: { rating: ScanDetailRating }) {
+  const stars = typeof rating.stars === 'number' ? rating.stars : 0;
+  const drankAt = formatDate(rating.drank_at);
+  const meta = [rating.occasion, drankAt].filter(Boolean).join(' · ');
+
+  return (
+    <View style={styles.ratingCard}>
+      <View style={styles.ratingRow}>
+        <View style={styles.stars}>
+          {Array.from({ length: 5 }).map((_, index) => (
+            <Ionicons
+              key={index}
+              name={index < stars ? 'star' : 'star-outline'}
+              size={18}
+              color={colors.warning}
+            />
+          ))}
+        </View>
+        <Text style={styles.ratingLabel}>deine Bewertung</Text>
+      </View>
+      {meta ? <Text style={styles.ratingMeta}>{meta}</Text> : null}
+      {rating.notes ? <Text style={styles.ratingNotes}>{rating.notes}</Text> : null}
+    </View>
+  );
+}
+
+function RecommendationRow({
+  icon,
+  label,
+  value,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  value: string;
+}) {
+  return (
+    <View style={styles.recommendationRow}>
+      <View style={styles.recommendationIcon}>
+        <Ionicons name={icon} size={20} color={colors.primaryDark} />
+      </View>
+      <View style={styles.recommendationText}>
+        <Text style={styles.recommendationLabel}>{label}</Text>
+        <Text style={styles.recommendationValue}>{value}</Text>
+      </View>
+    </View>
+  );
+}
+
+function DetailActions({
+  isBusy,
+  onCorrect,
+  onInventory,
+  onRate,
+}: {
+  isBusy: boolean;
+  onCorrect: () => void;
+  onInventory: () => void;
+  onRate: () => void;
+}) {
+  return (
+    <View style={styles.actions}>
+      <View style={styles.actionButtons}>
+        <Pressable
+          accessibilityRole="button"
+          disabled={isBusy}
+          onPress={onRate}
+          style={[styles.actionButton, isBusy && styles.disabledAction]}
+        >
+          <Ionicons name="star-outline" size={20} color={colors.white} />
+          <Text style={styles.actionButtonText}>Bewerten</Text>
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          disabled={isBusy}
+          onPress={onInventory}
+          style={[styles.actionButton, isBusy && styles.disabledAction]}
+        >
+          <Ionicons name="wine-outline" size={20} color={colors.white} />
+          <Text style={styles.actionButtonText}>Zum Bestand</Text>
+        </Pressable>
+      </View>
+
+      <Pressable
+        accessibilityRole="button"
+        disabled={isBusy}
+        onPress={onCorrect}
+        style={styles.correctionLink}
+      >
+        <Text style={styles.correctionLinkText}>Fehler korrigieren →</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+function CorrectionModal({
+  isDeleting,
+  onCancel,
+  onDelete,
+  onOpenVintage,
+  visible,
+}: {
+  isDeleting: boolean;
+  onCancel: () => void;
+  onDelete: () => void;
+  onOpenVintage: () => void;
+  visible: boolean;
+}) {
+  return (
+    <Modal
+      animationType="fade"
+      onRequestClose={onCancel}
+      transparent
+      visible={visible}
+    >
+      <View style={styles.modalRoot}>
+        <Pressable
+          accessibilityLabel="Fehler korrigieren schließen"
+          onPress={onCancel}
+          style={styles.modalBackdrop}
+        />
+        <View style={styles.bottomSheet}>
+          <View style={styles.modalHandle} />
+          <Text style={styles.modalTitle}>Fehler korrigieren</Text>
+          <Text style={styles.modalDescription}>
+            Wähle, was an diesem Scan angepasst werden soll.
+          </Text>
+
+          <View style={styles.modalOptions}>
+            <ModalOption
+              icon="calendar-outline"
+              label="Anderen Jahrgang zuweisen"
+              onPress={onOpenVintage}
+            />
+            <ModalOption
+              destructive
+              icon="trash-outline"
+              isBusy={isDeleting}
+              label="Scan löschen"
+              onPress={onDelete}
+            />
+          </View>
+
+          <Pressable onPress={onCancel} style={styles.modalCancelButton}>
+            <Text style={styles.modalCancelText}>Abbrechen</Text>
+          </Pressable>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+function VintageReassignModal({
+  currentVintageYear,
+  isLoadingYears,
+  isSaving,
+  knownYears,
+  onCancel,
+  onChange,
+  onSave,
+  value,
+  visible,
+}: {
+  currentVintageYear: number | null;
+  isLoadingYears: boolean;
+  isSaving: boolean;
+  knownYears: number[];
+  onCancel: () => void;
+  onChange: (value: number | null) => void;
+  onSave: () => void;
+  value: number | null;
+  visible: boolean;
+}) {
+  const saveDisabled = !value || value === currentVintageYear || isSaving;
+
+  return (
+    <Modal
+      animationType="fade"
+      onRequestClose={onCancel}
+      transparent
+      visible={visible}
+    >
+      <View style={styles.modalRoot}>
+        <Pressable
+          accessibilityLabel="Jahrgang ändern schließen"
+          onPress={onCancel}
+          style={styles.modalBackdrop}
+        />
+        <View style={[styles.bottomSheet, styles.vintageSheet]}>
+          <View style={styles.modalHeader}>
+            <View>
+              <Text style={styles.modalTitle}>Anderen Jahrgang zuweisen</Text>
+              <Text style={styles.modalDescription}>
+                Der Scan wird auf den gewählten Jahrgang gesetzt.
+              </Text>
+            </View>
+            <Pressable onPress={onCancel} style={styles.modalCloseButton}>
+              <Ionicons name="close" size={22} color={colors.text} />
+            </Pressable>
+          </View>
+
+          {isLoadingYears ? (
+            <View style={styles.vintageLoading}>
+              <ActivityIndicator color={colors.primary} />
+              <Text style={styles.vintageLoadingText}>
+                Jahrgänge werden geladen...
+              </Text>
+            </View>
+          ) : (
+            <ScrollView
+              contentContainerStyle={styles.vintagePickerContent}
+              showsVerticalScrollIndicator={false}
+            >
+              <VintageYearPicker
+                knownYears={knownYears}
+                onChange={onChange}
+                suggestedYear={currentVintageYear}
+                value={value}
+              />
+            </ScrollView>
+          )}
+
+          <View style={styles.modalActionRow}>
+            <Pressable onPress={onCancel} style={styles.secondaryModalButton}>
+              <Text style={styles.secondaryModalButtonText}>Abbrechen</Text>
+            </Pressable>
+            <Pressable
+              disabled={saveDisabled}
+              onPress={onSave}
+              style={[
+                styles.primaryModalButton,
+                saveDisabled && styles.disabledAction,
+              ]}
+            >
+              {isSaving ? (
+                <ActivityIndicator color={colors.white} />
+              ) : (
+                <Text style={styles.primaryModalButtonText}>Speichern</Text>
+              )}
+            </Pressable>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+function ModalOption({
+  destructive = false,
+  icon,
+  isBusy = false,
+  label,
+  onPress,
+}: {
+  destructive?: boolean;
+  icon: keyof typeof Ionicons.glyphMap;
+  isBusy?: boolean;
+  label: string;
+  onPress: () => void;
+}) {
+  const color = destructive ? colors.error : colors.primaryDark;
+
+  return (
+    <Pressable
+      disabled={isBusy}
+      onPress={onPress}
+      style={[styles.modalOption, isBusy && styles.disabledAction]}
+    >
+      <View style={styles.modalOptionIcon}>
+        {isBusy ? (
+          <ActivityIndicator color={color} />
+        ) : (
+          <Ionicons name={icon} size={20} color={color} />
+        )}
+      </View>
+      <Text
+        style={[
+          styles.modalOptionText,
+          destructive && styles.modalOptionTextDestructive,
+        ]}
+      >
+        {label}
+      </Text>
+      <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+    </Pressable>
+  );
+}
+
+function Section({
+  children,
+  title,
+}: {
+  children: React.ReactNode;
+  title: string;
+}) {
+  return (
+    <View style={styles.section}>
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>{title}</Text>
+        <View style={styles.sectionLine} />
+      </View>
+      {children}
+    </View>
+  );
+}
+
+function InfoGrid({ items }: { items: InfoItem[] }) {
+  return (
+    <View style={styles.infoGrid}>
+      {items.map((item) => (
+        <View key={item.label} style={styles.infoCell}>
+          <Text style={styles.infoLabel}>{item.label}</Text>
+          <Text style={styles.infoValue}>{item.value}</Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+function CenterState({
+  ctaLabel,
+  description,
+  icon,
+  onPress,
+  title,
+}: {
+  ctaLabel?: string;
+  description: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  onPress?: () => void;
+  title: string;
+}) {
+  return (
+    <View style={styles.centerState}>
+      <View style={styles.centerIconShell}>
+        <Ionicons name={icon} size={34} color={colors.primaryDark} />
+      </View>
+      <View style={styles.centerCopy}>
+        <Text style={styles.centerTitle}>{title}</Text>
+        <Text style={styles.centerDescription}>{description}</Text>
+      </View>
+      {ctaLabel && onPress ? (
+        <Pressable onPress={onPress} style={styles.centerButton}>
+          <Text style={styles.centerButtonText}>{ctaLabel}</Text>
+        </Pressable>
+      ) : null}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  actionButton: {
+    alignItems: 'center',
+    backgroundColor: colors.primary,
+    borderRadius: radii.md,
+    flex: 1,
+    flexDirection: 'row',
+    gap: spacing.sm,
+    height: 56,
+    justifyContent: 'center',
+    paddingHorizontal: spacing.md,
+  },
+  actionButtonText: {
+    color: colors.white,
+    fontSize: typography.size.base,
+    fontWeight: typography.weight.extraBold,
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    gap: spacing.md,
+  },
+  actions: {
+    gap: spacing.md,
+  },
+  bottomSheet: {
+    backgroundColor: colors.background,
+    borderTopLeftRadius: radii.lg,
+    borderTopRightRadius: radii.lg,
+    gap: spacing.lg,
+    maxHeight: '88%',
+    padding: spacing.xl,
+    paddingBottom: spacing.xxxl,
+  },
+  centerButton: {
+    alignItems: 'center',
+    backgroundColor: colors.primary,
+    borderRadius: radii.md,
+    justifyContent: 'center',
+    minHeight: 52,
+    minWidth: 168,
+    paddingHorizontal: spacing.xl,
+  },
+  centerButtonText: {
+    color: colors.white,
+    fontSize: typography.size.base,
+    fontWeight: typography.weight.extraBold,
+  },
+  centerCopy: {
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  centerDescription: {
+    color: colors.textSecondary,
+    fontSize: typography.size.base,
+    lineHeight: typography.lineHeight.base,
+    maxWidth: 320,
+    textAlign: 'center',
+  },
+  centerIconShell: {
+    alignItems: 'center',
+    backgroundColor: colors.surfaceWarm,
+    borderColor: colors.border,
+    borderRadius: radii.pill,
+    borderWidth: 1,
+    height: 88,
+    justifyContent: 'center',
+    width: 88,
+  },
+  centerState: {
+    alignItems: 'center',
+    flex: 1,
+    gap: spacing.xxl,
+    justifyContent: 'center',
+    paddingHorizontal: spacing.screenX,
+  },
+  centerTitle: {
+    color: colors.text,
+    fontSize: typography.size.xxl,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.xl,
+    textAlign: 'center',
+  },
+  content: {
+    gap: spacing.xxl,
+    paddingHorizontal: spacing.screenX,
+    paddingTop: spacing.lg,
+  },
+  correctionLink: {
+    alignSelf: 'center',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+  },
+  correctionLinkText: {
+    color: colors.primaryDark,
+    fontSize: typography.size.base,
+    fontWeight: typography.weight.extraBold,
+  },
+  descriptionBody: {
+    color: colors.text,
+    fontSize: typography.size.base,
+    lineHeight: typography.lineHeight.base,
+  },
+  descriptionLead: {
+    color: colors.text,
+    fontSize: typography.size.lg,
+    fontWeight: typography.weight.extraBold,
+    lineHeight: typography.lineHeight.lg,
+  },
+  descriptionPanel: {
+    backgroundColor: colors.surfaceWarm,
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    gap: spacing.md,
+    padding: spacing.lg,
+  },
+  disabledAction: {
+    opacity: 0.55,
+  },
+  header: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingBottom: spacing.sm,
+    paddingHorizontal: spacing.lg,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  headerButton: {
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: radii.pill,
+    borderWidth: 1,
+    height: 44,
+    justifyContent: 'center',
+    width: 44,
+  },
+  infoCell: {
+    backgroundColor: colors.surfaceWarm,
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    flexBasis: '47%',
+    flexGrow: 1,
+    gap: spacing.xs,
+    minHeight: 78,
+    minWidth: 132,
+    padding: spacing.md,
+  },
+  infoGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.md,
+  },
+  infoLabel: {
+    color: colors.textSecondary,
+    fontSize: typography.size.xs,
+    fontWeight: typography.weight.bold,
+    textTransform: 'uppercase',
+  },
+  infoValue: {
+    color: colors.text,
+    fontSize: typography.size.base,
+    fontWeight: typography.weight.extraBold,
+    lineHeight: typography.lineHeight.base,
+  },
+  loadingState: {
+    alignItems: 'center',
+    flex: 1,
+    gap: spacing.lg,
+    justifyContent: 'center',
+  },
+  loadingText: {
+    color: colors.textSecondary,
+    fontSize: typography.size.base,
+    fontWeight: typography.weight.bold,
+  },
+  modalActionRow: {
+    flexDirection: 'row',
+    gap: spacing.md,
+  },
+  modalBackdrop: {
+    flex: 1,
+  },
+  modalCancelButton: {
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    justifyContent: 'center',
+    minHeight: 52,
+  },
+  modalCancelText: {
+    color: colors.primaryDark,
+    fontSize: typography.size.base,
+    fontWeight: typography.weight.extraBold,
+  },
+  modalCloseButton: {
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: radii.pill,
+    borderWidth: 1,
+    height: 40,
+    justifyContent: 'center',
+    width: 40,
+  },
+  modalDescription: {
+    color: colors.textSecondary,
+    fontSize: typography.size.sm,
+    lineHeight: typography.lineHeight.sm,
+  },
+  modalHandle: {
+    alignSelf: 'center',
+    backgroundColor: colors.border,
+    borderRadius: radii.pill,
+    height: 4,
+    width: 48,
+  },
+  modalHeader: {
+    alignItems: 'flex-start',
+    flexDirection: 'row',
+    gap: spacing.md,
+    justifyContent: 'space-between',
+  },
+  modalOption: {
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: spacing.md,
+    minHeight: 58,
+    paddingHorizontal: spacing.lg,
+  },
+  modalOptionIcon: {
+    alignItems: 'center',
+    backgroundColor: colors.surfaceWarm,
+    borderRadius: radii.pill,
+    height: 34,
+    justifyContent: 'center',
+    width: 34,
+  },
+  modalOptionText: {
+    color: colors.text,
+    flex: 1,
+    fontSize: typography.size.base,
+    fontWeight: typography.weight.extraBold,
+  },
+  modalOptionTextDestructive: {
+    color: colors.error,
+  },
+  modalOptions: {
+    gap: spacing.sm,
+  },
+  modalRoot: {
+    backgroundColor: colors.overlay,
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  modalTitle: {
+    color: colors.text,
+    fontSize: typography.size.xl,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.lg,
+  },
+  photo: {
+    height: '100%',
+    width: '100%',
+  },
+  photoFrame: {
+    alignSelf: 'center',
+    aspectRatio: 4 / 5,
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    maxWidth: 360,
+    overflow: 'hidden',
+    shadowColor: colors.shadow,
+    shadowOffset: { height: 8, width: 0 },
+    shadowOpacity: 0.08,
+    shadowRadius: 18,
+    width: '100%',
+  },
+  photoPlaceholder: {
+    alignItems: 'center',
+    backgroundColor: colors.surfaceWarm,
+    flex: 1,
+    justifyContent: 'center',
+  },
+  ratingCard: {
+    alignSelf: 'flex-start',
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    gap: spacing.xs,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  ratingLabel: {
+    color: colors.textSecondary,
+    fontSize: typography.size.sm,
+    fontWeight: typography.weight.bold,
+  },
+  ratingMeta: {
+    color: colors.textSecondary,
+    fontSize: typography.size.xs,
+    fontWeight: typography.weight.medium,
+  },
+  ratingNotes: {
+    color: colors.text,
+    fontSize: typography.size.sm,
+    lineHeight: typography.lineHeight.sm,
+    maxWidth: 300,
+  },
+  ratingRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  primaryModalButton: {
+    alignItems: 'center',
+    backgroundColor: colors.primary,
+    borderRadius: radii.md,
+    flex: 1,
+    justifyContent: 'center',
+    minHeight: 52,
+    paddingHorizontal: spacing.lg,
+  },
+  primaryModalButtonText: {
+    color: colors.white,
+    fontSize: typography.size.base,
+    fontWeight: typography.weight.extraBold,
+  },
+  recommendationIcon: {
+    alignItems: 'center',
+    backgroundColor: colors.surfaceWarm,
+    borderColor: colors.border,
+    borderRadius: radii.pill,
+    borderWidth: 1,
+    height: 38,
+    justifyContent: 'center',
+    width: 38,
+  },
+  recommendationLabel: {
+    color: colors.textSecondary,
+    fontSize: typography.size.sm,
+    fontWeight: typography.weight.bold,
+  },
+  recommendationPanel: {
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    overflow: 'hidden',
+  },
+  recommendationRow: {
+    alignItems: 'flex-start',
+    borderBottomColor: colors.border,
+    borderBottomWidth: 1,
+    flexDirection: 'row',
+    gap: spacing.md,
+    padding: spacing.lg,
+  },
+  recommendationText: {
+    flex: 1,
+    gap: spacing.xs,
+  },
+  recommendationValue: {
+    color: colors.text,
+    fontSize: typography.size.base,
+    fontWeight: typography.weight.bold,
+    lineHeight: typography.lineHeight.base,
+  },
+  screen: {
+    backgroundColor: colors.background,
+    flex: 1,
+  },
+  section: {
+    gap: spacing.md,
+  },
+  sectionHeader: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: spacing.md,
+  },
+  sectionLine: {
+    backgroundColor: colors.border,
+    flex: 1,
+    height: 1,
+  },
+  sectionTitle: {
+    color: colors.text,
+    fontSize: typography.size.lg,
+    fontWeight: typography.weight.black,
+  },
+  stars: {
+    flexDirection: 'row',
+    gap: 1,
+  },
+  summary: {
+    gap: spacing.md,
+  },
+  secondaryModalButton: {
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    flex: 1,
+    justifyContent: 'center',
+    minHeight: 52,
+    paddingHorizontal: spacing.lg,
+  },
+  secondaryModalButtonText: {
+    color: colors.primaryDark,
+    fontSize: typography.size.base,
+    fontWeight: typography.weight.extraBold,
+  },
+  title: {
+    color: colors.text,
+    fontSize: typography.size.xxl,
+    fontWeight: typography.weight.black,
+    lineHeight: typography.lineHeight.xl,
+  },
+  vintageLoading: {
+    alignItems: 'center',
+    gap: spacing.md,
+    justifyContent: 'center',
+    minHeight: 220,
+  },
+  vintageLoadingText: {
+    color: colors.textSecondary,
+    fontSize: typography.size.base,
+    fontWeight: typography.weight.bold,
+  },
+  vintagePickerContent: {
+    paddingBottom: spacing.md,
+  },
+  vintageSheet: {
+    height: '88%',
+  },
+});

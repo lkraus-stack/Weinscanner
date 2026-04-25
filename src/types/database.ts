@@ -367,6 +367,32 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_user_scan_history: {
+        Args: {
+          page_limit?: number
+          page_offset?: number
+          search_query?: string
+          wine_color_filter?: string
+        }
+        Returns: {
+          country: string
+          grape_variety: string
+          label_image_path: string
+          producer: string
+          region: string
+          scan_id: string
+          scanned_at: string
+          vintage_id: string
+          vintage_year: number
+          wine_color: string
+          wine_id: string
+          wine_name: string
+        }[]
+      }
+      reassign_scan_vintage: {
+        Args: { scan_id: string; target_vintage_year: number }
+        Returns: Json
+      }
       save_scan_atomic: { Args: { payload: Json }; Returns: Json }
       search_wines: {
         Args: {

@@ -109,6 +109,12 @@ export default function AppLayout() {
           href: null,
         }}
       />
+      <Tabs.Screen
+        name="wine-detail"
+        options={{
+          href: null,
+        }}
+      />
     </Tabs>
   );
 }

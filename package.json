@@ -9,6 +9,7 @@
     "lint": "expo lint",
     "dev:create-user": "tsx scripts/create-dev-user.ts",
     "test:extract-wine": "tsx scripts/test-extract-wine.ts",
+    "test:history": "tsx scripts/test-history.ts",
     "test:save-scan": "tsx scripts/test-save-scan.ts",
     "test:scan-wine": "tsx scripts/test-scan-wine.ts",
     "test:storage": "tsx scripts/test-storage.ts",
@@ -16,7 +17,9 @@
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",
+    "@shopify/flash-list": "2.0.2",
     "@supabase/supabase-js": "^2.104.1",
+    "@tanstack/react-query": "^5.100.5",
     "babel-preset-expo": "~54.0.10",
     "base64-arraybuffer": "^1.0.2",
     "expo": "~54.0.33",
