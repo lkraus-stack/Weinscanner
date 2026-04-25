@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabase';
 import type { Tables } from '@/types/database';
 
 export type InventoryFilters = {
+  hideEmptyInventory?: boolean;
   storageLocation?: string;
 };
 
@@ -149,13 +150,14 @@ async function mapInventoryRows(
 }
 
 export function useInventory(filters: InventoryFilters) {
+  const hideEmptyInventory = filters.hideEmptyInventory ?? false;
   const storageLocation = filters.storageLocation?.trim() || undefined;
 
   return useInfiniteQuery<
     InventoryPage,
     Error,
     InfiniteData<InventoryPage>,
-    [string, { storageLocation?: string }],
+    [string, { hideEmptyInventory: boolean; storageLocation?: string }],
     number
   >({
     getNextPageParam: (lastPage) => lastPage.nextPage,
@@ -196,6 +198,10 @@ export function useInventory(filters: InventoryFilters) {
         query = query.eq('storage_location', storageLocation);
       }
 
+      if (hideEmptyInventory) {
+        query = query.gt('quantity', 0);
+      }
+
       const { data, error } = await query;
 
       if (error) {
@@ -210,7 +216,7 @@ export function useInventory(filters: InventoryFilters) {
           rows.length === INVENTORY_PAGE_SIZE ? pageParam + 1 : undefined,
       };
     },
-    queryKey: ['inventory', { storageLocation }],
+    queryKey: ['inventory', { hideEmptyInventory, storageLocation }],
     staleTime: 30_000,
   });
 }

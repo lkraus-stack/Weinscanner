@@ -29,6 +29,7 @@ import {
   useInventory,
 } from '@/hooks/useInventory';
 import { useInventoryStats } from '@/hooks/useInventoryStats';
+import { usePreferences } from '@/hooks/usePreferences';
 import {
   decrementQuantity,
   deleteInventoryItem,
@@ -94,7 +95,11 @@ export default function InventoryScreen() {
   );
   const [isActionModalVisible, setIsActionModalVisible] = useState(false);
   const [isEditModalVisible, setIsEditModalVisible] = useState(false);
-  const inventoryQuery = useInventory({ storageLocation });
+  const preferencesQuery = usePreferences();
+  const inventoryQuery = useInventory({
+    hideEmptyInventory: preferencesQuery.preferences.hide_empty_inventory,
+    storageLocation,
+  });
   const statsQuery = useInventoryStats();
   const items = useMemo(
     () => inventoryQuery.data?.pages.flatMap((page) => page.data) ?? [],

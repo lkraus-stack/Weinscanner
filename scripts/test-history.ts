@@ -53,6 +53,10 @@ function record(steps: Step[], label: string, ok: boolean) {
   console.log(`${steps.length}. ${label}: ${ok ? 'JA' : 'NEIN'}`);
 }
 
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 function parseEnvFile(contents: string): Partial<TestEnv> {
   return contents
     .split(/\r?\n/)
@@ -218,52 +222,64 @@ async function invokeSaveScan(
   index: number
 ) {
   const color = WINE_COLORS[index % WINE_COLORS.length];
-  const response = await fetch(`${env.SUPABASE_URL}/functions/v1/save-scan`, {
-    body: JSON.stringify({
-      selectedVintageYear: 2025 - (index % 5),
-      source: 'manual',
-      storagePath,
-      vintageData: {
-        ai_confidence: 0.9,
-        alcohol_percent: 12 + (index % 3),
-        aromas: ['Apfel', 'Mineralik'],
-        data_sources: ['https://example.com/history-test'],
-        description_short: 'History-Testwein',
-        drinking_window_end: 2030,
-        drinking_window_start: 2026,
-        serving_temperature: '10-12 °C',
-      },
-      wineData: {
-        appellation: 'History DOC',
-        country: 'Deutschland',
-        grape_variety: index % 2 === 0 ? 'Riesling' : 'Spätburgunder',
-        producer: `History Estate ${String(index).padStart(2, '0')}`,
-        region: index % 3 === 0 ? 'Mosel' : 'Pfalz',
-        taste_dryness: 'trocken',
-        wine_color: color,
-        wine_name: `Chronik Test ${String(index).padStart(2, '0')}`,
-      },
-    }),
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      apikey: env.SUPABASE_ANON_KEY,
-      'Content-Type': 'application/json',
+  const body = JSON.stringify({
+    selectedVintageYear: 2025 - (index % 5),
+    source: 'manual',
+    storagePath,
+    vintageData: {
+      ai_confidence: 0.9,
+      alcohol_percent: 12 + (index % 3),
+      aromas: ['Apfel', 'Mineralik'],
+      data_sources: ['https://example.com/history-test'],
+      description_short: 'History-Testwein',
+      drinking_window_end: 2030,
+      drinking_window_start: 2026,
+      serving_temperature: '10-12 °C',
     },
-    method: 'POST',
+    wineData: {
+      appellation: 'History DOC',
+      country: 'Deutschland',
+      grape_variety: index % 2 === 0 ? 'Riesling' : 'Spätburgunder',
+      producer: `History Estate ${String(index).padStart(2, '0')}`,
+      region: index % 3 === 0 ? 'Mosel' : 'Pfalz',
+      taste_dryness: 'trocken',
+      wine_color: color,
+      wine_name: `Chronik Test ${String(index).padStart(2, '0')}`,
+    },
   });
-  const responseText = await response.text();
+  let lastErrorText = '';
 
-  if (!response.ok) {
-    throw new Error(
-      `save-scan returned ${response.status} ${response.statusText}: ${responseText}`
-    );
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    const response = await fetch(`${env.SUPABASE_URL}/functions/v1/save-scan`, {
+      body,
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        apikey: env.SUPABASE_ANON_KEY,
+        'Content-Type': 'application/json',
+      },
+      method: 'POST',
+    });
+    const responseText = await response.text();
+
+    if (response.ok) {
+      return JSON.parse(responseText) as {
+        scanId: string;
+        vintageId: string;
+        wineId: string;
+      };
+    }
+
+    lastErrorText = `save-scan returned ${response.status} ${response.statusText}: ${responseText}`;
+
+    if ([408, 429, 500, 502, 503, 504].includes(response.status) && attempt < 3) {
+      await sleep(1000 * (attempt + 1));
+      continue;
+    }
+
+    break;
   }
 
-  return JSON.parse(responseText) as {
-    scanId: string;
-    vintageId: string;
-    wineId: string;
-  };
+  throw new Error(lastErrorText);
 }
 
 async function queryHistory(

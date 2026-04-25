@@ -74,5 +74,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       process.env.EXPO_PUBLIC_SUPABASE_URL ?? 'https://placeholder.supabase.co',
     supabaseAnonKey:
       process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? placeholderAnonKey,
+    privacyUrl: process.env.EXPO_PUBLIC_PRIVACY_URL ?? '',
+    imprintUrl: process.env.EXPO_PUBLIC_IMPRINT_URL ?? '',
   },
 });

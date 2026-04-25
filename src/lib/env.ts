@@ -3,6 +3,8 @@ import Constants from 'expo-constants';
 type ExpoExtra = {
   supabaseUrl?: unknown;
   supabaseAnonKey?: unknown;
+  privacyUrl?: unknown;
+  imprintUrl?: unknown;
 };
 
 const extra = Constants.expoConfig?.extra as ExpoExtra | undefined;
@@ -21,4 +23,10 @@ export const env = {
     'SUPABASE_ANON_KEY',
     extra?.supabaseAnonKey
   ),
+  PRIVACY_URL: optional(extra?.privacyUrl),
+  IMPRINT_URL: optional(extra?.imprintUrl),
 } as const;
+
+function optional(value: unknown): string | null {
+  return typeof value === 'string' && value.length > 0 ? value : null;
+}

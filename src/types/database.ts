@@ -425,6 +425,17 @@ export type Database = {
           wine_name: string
         }[]
       }
+      user_stats: {
+        Args: { p_user_id: string }
+        Returns: {
+          distinct_regions: number
+          rating_count: number
+          scan_count: number
+          top_grape_variety: string | null
+          top_region: string | null
+          total_bottles: number
+        }[]
+      }
     }
     Enums: {
       [_ in never]: never

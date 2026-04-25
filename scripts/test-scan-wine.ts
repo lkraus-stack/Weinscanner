@@ -56,6 +56,10 @@ function record(steps: Step[], label: string, ok: boolean) {
   console.log(`${steps.length}. ${label}: ${ok ? 'JA' : 'NEIN'}`);
 }
 
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 function parseEnvFile(contents: string): Partial<TestEnv> {
   return contents
     .split(/\r?\n/)
@@ -337,26 +341,37 @@ async function invokeScanWine(
   accessToken: string,
   imageUrl: string
 ): Promise<ScanWineResult> {
-  const response = await fetch(`${env.SUPABASE_URL}/functions/v1/scan-wine`, {
-    body: JSON.stringify({
-      imageUrl,
-    }),
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      apikey: env.SUPABASE_ANON_KEY,
-      'Content-Type': 'application/json',
-    },
-    method: 'POST',
-  });
-  const responseText = await response.text();
+  let lastErrorText = '';
 
-  if (!response.ok) {
-    throw new Error(
-      `scan-wine returned ${response.status} ${response.statusText}: ${responseText}`
-    );
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const response = await fetch(`${env.SUPABASE_URL}/functions/v1/scan-wine`, {
+      body: JSON.stringify({
+        imageUrl,
+      }),
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        apikey: env.SUPABASE_ANON_KEY,
+        'Content-Type': 'application/json',
+      },
+      method: 'POST',
+    });
+    const responseText = await response.text();
+
+    if (response.ok) {
+      return JSON.parse(responseText) as ScanWineResult;
+    }
+
+    lastErrorText = `scan-wine returned ${response.status} ${response.statusText}: ${responseText}`;
+
+    if ([408, 429, 500, 502, 503, 504].includes(response.status) && attempt < 4) {
+      await sleep(2000 * (attempt + 1));
+      continue;
+    }
+
+    break;
   }
 
-  return JSON.parse(responseText) as ScanWineResult;
+  throw new Error(lastErrorText);
 }
 
 async function cleanup(
