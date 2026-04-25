@@ -9,6 +9,9 @@ import {
 } from 'react-native';
 
 import { supabase } from '@/lib/supabase';
+import { colors } from '@/theme/colors';
+import { radii, spacing } from '@/theme/spacing';
+import { typography } from '@/theme/typography';
 
 type Step = 'email' | 'code';
 
@@ -103,7 +106,7 @@ export function EmailOtpForm() {
           value={email}
           onChangeText={setEmail}
           placeholder="deine@email.de"
-          placeholderTextColor="#8A8178"
+          placeholderTextColor={colors.placeholder}
           autoCapitalize="none"
           autoComplete="email"
           autoCorrect={false}
@@ -131,7 +134,7 @@ export function EmailOtpForm() {
             value={code}
             onChangeText={handleCodeChange}
             placeholder="123456"
-            placeholderTextColor="#8A8178"
+            placeholderTextColor={colors.placeholder}
             autoFocus
             inputMode="numeric"
             keyboardType="number-pad"
@@ -155,7 +158,7 @@ export function EmailOtpForm() {
           disabled={!canSendCode}
         >
           {isSendingCode ? (
-            <ActivityIndicator color="#FFFFFF" />
+            <ActivityIndicator color={colors.white} />
           ) : (
             <Text style={styles.buttonText}>Code senden</Text>
           )}
@@ -167,7 +170,7 @@ export function EmailOtpForm() {
           disabled={!canVerifyCode}
         >
           {isVerifyingCode ? (
-            <ActivityIndicator color="#FFFFFF" />
+            <ActivityIndicator color={colors.white} />
           ) : (
             <Text style={styles.buttonText}>Einloggen</Text>
           )}
@@ -179,25 +182,25 @@ export function EmailOtpForm() {
 
 const styles = StyleSheet.create({
   container: {
-    gap: 16,
+    gap: spacing.lg,
   },
   fieldGroup: {
-    gap: 8,
+    gap: spacing.sm,
   },
   label: {
-    color: '#1A1A1A',
-    fontSize: 14,
-    fontWeight: '700',
+    color: colors.text,
+    fontSize: typography.size.md,
+    fontWeight: typography.weight.bold,
   },
   input: {
-    backgroundColor: '#FFFFFF',
-    borderColor: '#E5E0D5',
-    borderRadius: 12,
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: radii.md,
     borderWidth: 1,
-    color: '#1A1A1A',
-    fontSize: 16,
+    color: colors.text,
+    fontSize: typography.size.base,
     minHeight: 54,
-    paddingHorizontal: 16,
+    paddingHorizontal: spacing.lg,
   },
   codeHeader: {
     alignItems: 'center',
@@ -205,40 +208,40 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   codeInput: {
-    fontSize: 22,
-    fontWeight: '700',
+    fontSize: typography.size.xl,
+    fontWeight: typography.weight.bold,
     letterSpacing: 0,
     textAlign: 'center',
   },
   hintText: {
-    color: '#6B6B6B',
-    fontSize: 13,
-    lineHeight: 18,
+    color: colors.textSecondary,
+    fontSize: typography.size.sm,
+    lineHeight: typography.lineHeight.sm,
   },
   errorText: {
-    color: '#C62828',
-    fontSize: 14,
-    lineHeight: 20,
+    color: colors.error,
+    fontSize: typography.size.md,
+    lineHeight: typography.lineHeight.md,
   },
   linkText: {
-    color: '#8B3A2A',
-    fontSize: 14,
-    fontWeight: '700',
+    color: colors.primaryDark,
+    fontSize: typography.size.md,
+    fontWeight: typography.weight.bold,
   },
   button: {
     alignItems: 'center',
-    backgroundColor: '#B85C4A',
-    borderRadius: 12,
+    backgroundColor: colors.primary,
+    borderRadius: radii.md,
     justifyContent: 'center',
     minHeight: 54,
-    paddingHorizontal: 18,
+    paddingHorizontal: spacing.lg + 2,
   },
   buttonDisabled: {
     opacity: 0.45,
   },
   buttonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '800',
+    color: colors.white,
+    fontSize: typography.size.base,
+    fontWeight: typography.weight.extraBold,
   },
 });

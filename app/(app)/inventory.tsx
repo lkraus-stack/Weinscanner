@@ -4,15 +4,15 @@ import { StyleSheet, View } from 'react-native';
 import { EmptyState } from '@/components/empty-state';
 import { colors } from '@/theme/colors';
 
-export default function HistoryScreen() {
+export default function InventoryScreen() {
   const router = useRouter();
 
   return (
     <View style={styles.screen}>
       <EmptyState
-        icon="wine-outline"
-        title="Noch kein Verlauf"
-        description="Gespeicherte Scans erscheinen hier, sobald du deinen ersten Wein erfasst hast."
+        icon="cube-outline"
+        title="Dein Bestand ist leer"
+        description="Deine Flaschen und Lagerorte erscheinen hier, sobald du Weine zum Bestand hinzufügst."
         cta={{
           label: 'Wein scannen',
           onPress: () => router.push('/(app)/scan'),

@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
 import { useAuth } from '@/hooks/useAuth';
+import { colors } from '@/theme/colors';
 
 SplashScreen.preventAutoHideAsync().catch(() => null);
 
@@ -37,7 +38,7 @@ export default function RootLayout() {
   if (isLoading) {
     return (
       <View style={styles.loadingScreen}>
-        <ActivityIndicator color="#B85C4A" />
+        <ActivityIndicator color={colors.primary} />
       </View>
     );
   }
@@ -48,7 +49,7 @@ export default function RootLayout() {
 const styles = StyleSheet.create({
   loadingScreen: {
     alignItems: 'center',
-    backgroundColor: '#FAF7F2',
+    backgroundColor: colors.background,
     flex: 1,
     justifyContent: 'center',
   },

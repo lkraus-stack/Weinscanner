@@ -2,6 +2,9 @@ import { KeyboardAvoidingView, Platform, StyleSheet, Text, View } from 'react-na
 
 import { AppleSignInButton } from '@/components/auth/AppleSignInButton';
 import { EmailOtpForm } from '@/components/auth/EmailOtpForm';
+import { colors } from '@/theme/colors';
+import { radii, spacing } from '@/theme/spacing';
+import { typography } from '@/theme/typography';
 
 export default function LoginScreen() {
   return (
@@ -35,51 +38,51 @@ export default function LoginScreen() {
 
 const styles = StyleSheet.create({
   screen: {
-    backgroundColor: '#FAF7F2',
+    backgroundColor: colors.background,
     flex: 1,
   },
   content: {
     flex: 1,
     justifyContent: 'center',
-    paddingHorizontal: 24,
-    paddingVertical: 40,
+    paddingHorizontal: spacing.screenX,
+    paddingVertical: spacing.screenY,
   },
   header: {
-    gap: 10,
-    marginBottom: 32,
+    gap: spacing.sm + 2,
+    marginBottom: spacing.xxxl,
   },
   brand: {
-    color: '#1A1A1A',
-    fontSize: 34,
-    fontWeight: '900',
+    color: colors.text,
+    fontSize: typography.size.brand,
+    fontWeight: typography.weight.black,
     letterSpacing: 0,
   },
   subtitle: {
-    color: '#6B6B6B',
-    fontSize: 16,
-    lineHeight: 23,
+    color: colors.textSecondary,
+    fontSize: typography.size.base,
+    lineHeight: typography.lineHeight.base,
   },
   panel: {
-    backgroundColor: '#FFFDF9',
-    borderColor: '#E5E0D5',
-    borderRadius: 16,
+    backgroundColor: colors.surfaceWarm,
+    borderColor: colors.border,
+    borderRadius: radii.lg,
     borderWidth: 1,
-    gap: 22,
-    padding: 20,
+    gap: spacing.xxl - 2,
+    padding: spacing.xl,
   },
   dividerRow: {
     alignItems: 'center',
     flexDirection: 'row',
-    gap: 12,
+    gap: spacing.md,
   },
   divider: {
-    backgroundColor: '#E5E0D5',
+    backgroundColor: colors.border,
     flex: 1,
     height: 1,
   },
   dividerText: {
-    color: '#6B6B6B',
-    fontSize: 13,
-    fontWeight: '700',
+    color: colors.textSecondary,
+    fontSize: typography.size.sm,
+    fontWeight: typography.weight.bold,
   },
 });
