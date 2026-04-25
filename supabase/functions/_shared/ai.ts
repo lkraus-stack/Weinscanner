@@ -1,5 +1,13 @@
 import OpenAI from 'npm:openai@4.62.1';
 
+type VisionCompletionOptions = {
+  imageUrl: string;
+  maxTokens: number;
+  signal: AbortSignal;
+  system: string;
+  userText: string;
+};
+
 function readEnv(key: string): string | undefined {
   const value = Deno.env.get(key);
 
@@ -27,4 +35,53 @@ export function assertVanteroConfigured() {
   requiredEnv('VANTERO_API_KEY');
   requiredEnv('VANTERO_API_BASE_URL');
   requiredEnv('VANTERO_MODEL_ID');
+}
+
+export async function createVisionChatCompletion({
+  imageUrl,
+  maxTokens,
+  signal,
+  system,
+  userText,
+}: VisionCompletionOptions): Promise<string> {
+  assertVanteroConfigured();
+
+  const response = await vanteroClient.chat.completions.create(
+    {
+      max_tokens: maxTokens,
+      messages: [
+        {
+          content: system,
+          role: 'system',
+        },
+        {
+          content: [
+            {
+              text: userText,
+              type: 'text',
+            },
+            {
+              image_url: {
+                url: imageUrl,
+              },
+              type: 'image_url',
+            },
+          ],
+          role: 'user',
+        },
+      ],
+      model: VANTERO_MODEL,
+      response_format: {
+        type: 'json_object',
+      },
+    },
+    { signal }
+  );
+  const responseText = response.choices[0]?.message?.content;
+
+  if (!responseText) {
+    throw new Error('Vantero-Response enthält keinen Text.');
+  }
+
+  return responseText;
 }

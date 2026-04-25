@@ -367,7 +367,21 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      search_wines: {
+        Args: {
+          query_producer: string
+          query_wine_name: string
+          similarity_threshold?: number
+        }
+        Returns: {
+          country: string
+          id: string
+          producer: string
+          region: string
+          similarity: number
+          wine_name: string
+        }[]
+      }
     }
     Enums: {
       [_ in never]: never

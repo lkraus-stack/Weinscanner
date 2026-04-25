@@ -1,11 +1,24 @@
+import type { Tables } from '@/types/database';
+
 export type WineColor = 'weiss' | 'rot' | 'rose' | 'schaum' | 'suess';
 
 export type TasteDryness = 'trocken' | 'halbtrocken' | 'lieblich' | 'suess';
 
-export type WineExtraction = {
+export type WineConfidence = {
+  producer: number;
+  wine_name: number;
+  vintage_year: number;
+  overall: number;
+};
+
+export type MinimalWineExtraction = {
   producer: string;
   wine_name: string;
   vintage_year: number | null;
+  confidence: WineConfidence;
+};
+
+export type WineExtraction = MinimalWineExtraction & {
   region: string | null;
   country: string | null;
   appellation: string | null;
@@ -24,11 +37,31 @@ export type WineExtraction = {
   serving_temperature: string | null;
   vinification: string | null;
   data_sources: string[];
-  confidence: {
-    producer: number;
-    wine_name: number;
-    vintage_year: number;
-    overall: number;
-  };
   notes: string;
 };
+
+export type WineRecord = Tables<'wines'>;
+
+export type VintageRecord = Tables<'vintages'>;
+
+export type ScanWineResult =
+  | {
+      minimal: MinimalWineExtraction;
+      source: 'low_confidence';
+    }
+  | {
+      matchedVintage: VintageRecord | null;
+      minimal: MinimalWineExtraction;
+      source: 'cache';
+      vintages: VintageRecord[];
+      wine: WineRecord;
+    }
+  | {
+      extraction: WineExtraction;
+      matchedVintage: VintageRecord | null;
+      minimal: MinimalWineExtraction;
+      source: 'fresh';
+      vintage: VintageRecord | null;
+      vintages: VintageRecord[];
+      wine: WineRecord;
+    };

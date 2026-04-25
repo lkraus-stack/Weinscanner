@@ -1,12 +1,22 @@
 import { supabase } from '@/lib/supabase';
-import type { WineExtraction } from '@/types/wine-extraction';
+import type {
+  ScanWineResult,
+  WineExtraction,
+} from '@/types/wine-extraction';
 
 type ExtractWineErrorResponse = { error: string };
 
-type ExtractWineResponse = WineExtraction | ExtractWineErrorResponse;
+type EdgeFunctionResponse<T> = T | ExtractWineErrorResponse;
 
-function isErrorResponse(data: ExtractWineResponse): data is ExtractWineErrorResponse {
-  return 'error' in data && typeof data.error === 'string';
+function isErrorResponse<T>(
+  data: EdgeFunctionResponse<T>
+): data is ExtractWineErrorResponse {
+  return (
+    typeof data === 'object' &&
+    data !== null &&
+    'error' in data &&
+    typeof data.error === 'string'
+  );
 }
 
 async function getFunctionErrorMessage(error: unknown): Promise<string> {
@@ -43,7 +53,9 @@ export async function extractWineFromLabel(
   imageUrl: string,
   ocrText?: string
 ): Promise<WineExtraction> {
-  const { data, error } = await supabase.functions.invoke<ExtractWineResponse>(
+  const { data, error } = await supabase.functions.invoke<
+    EdgeFunctionResponse<WineExtraction>
+  >(
     'extract-wine',
     {
       body: {
@@ -52,6 +64,32 @@ export async function extractWineFromLabel(
       },
     }
   );
+
+  if (error) {
+    throw new Error(await getFunctionErrorMessage(error));
+  }
+
+  if (!data) {
+    throw new Error('Etikett konnte nicht analysiert werden.');
+  }
+
+  if (isErrorResponse(data)) {
+    throw new Error(data.error);
+  }
+
+  return data;
+}
+
+export async function scanWineFromLabel(
+  imageUrl: string
+): Promise<ScanWineResult> {
+  const { data, error } = await supabase.functions.invoke<
+    EdgeFunctionResponse<ScanWineResult>
+  >('scan-wine', {
+    body: {
+      imageUrl,
+    },
+  });
 
   if (error) {
     throw new Error(await getFunctionErrorMessage(error));

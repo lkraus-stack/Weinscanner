@@ -16,11 +16,18 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AromaPills } from '@/components/scan/AromaPills';
 import { ConfidenceBadge } from '@/components/scan/ConfidenceBadge';
 import { WineDetailRow } from '@/components/scan/WineDetailRow';
-import { extractWineFromLabel } from '@/lib/ai-client';
+import { scanWineFromLabel } from '@/lib/ai-client';
 import { colors } from '@/theme/colors';
 import { radii, spacing } from '@/theme/spacing';
 import { typography } from '@/theme/typography';
-import type { WineExtraction } from '@/types/wine-extraction';
+import type {
+  MinimalWineExtraction,
+  ScanWineResult,
+  TasteDryness,
+  VintageRecord,
+  WineColor,
+  WineExtraction,
+} from '@/types/wine-extraction';
 
 type DisplayRow = {
   confidence?: number;
@@ -33,6 +40,20 @@ const LOADING_MESSAGES = [
   'Wein wird identifiziert...',
   'Details werden gesammelt...',
 ] as const;
+
+const WINE_COLORS = new Set<WineColor>([
+  'weiss',
+  'rot',
+  'rose',
+  'schaum',
+  'suess',
+]);
+const TASTE_DRYNESS = new Set<TasteDryness>([
+  'trocken',
+  'halbtrocken',
+  'lieblich',
+  'suess',
+]);
 
 function normalizeParam(value: string | string[] | undefined) {
   if (Array.isArray(value)) {
@@ -48,6 +69,40 @@ function valueOrDash(value: string | number | null | undefined) {
   }
 
   return String(value);
+}
+
+function numberOrNull(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === 'string' && value.trim()) {
+    const parsedValue = Number(value);
+
+    return Number.isFinite(parsedValue) ? parsedValue : null;
+  }
+
+  return null;
+}
+
+function stringList(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.filter((item): item is string => typeof item === 'string');
+}
+
+function wineColorOrNull(value: unknown): WineColor | null {
+  return typeof value === 'string' && WINE_COLORS.has(value as WineColor)
+    ? (value as WineColor)
+    : null;
+}
+
+function tasteDrynessOrNull(value: unknown): TasteDryness | null {
+  return typeof value === 'string' && TASTE_DRYNESS.has(value as TasteDryness)
+    ? (value as TasteDryness)
+    : null;
 }
 
 function formatPercent(value: number | null) {
@@ -152,6 +207,109 @@ function needsBackLabelScan(extraction: WineExtraction) {
   return extraction.vintage_year === null;
 }
 
+function emptyExtractionFromMinimal(
+  minimal: MinimalWineExtraction,
+  notes: string
+): WineExtraction {
+  return {
+    alcohol_percent: null,
+    appellation: null,
+    aromas: [],
+    confidence: minimal.confidence,
+    country: null,
+    data_sources: [],
+    description_long: null,
+    description_short: null,
+    drinking_window_end: null,
+    drinking_window_start: null,
+    food_pairing: null,
+    grape_variety: null,
+    notes,
+    price_max_eur: null,
+    price_min_eur: null,
+    producer: minimal.producer,
+    region: null,
+    serving_temperature: null,
+    taste_dryness: null,
+    vinification: null,
+    vintage_year: minimal.vintage_year,
+    wine_color: null,
+    wine_name: minimal.wine_name,
+  };
+}
+
+function vintageToExtraction(
+  result: Extract<ScanWineResult, { source: 'cache' }>
+): WineExtraction {
+  const vintage: VintageRecord | null =
+    result.matchedVintage ?? result.vintages[0] ?? null;
+
+  return {
+    alcohol_percent: numberOrNull(vintage?.alcohol_percent),
+    appellation: result.wine.appellation,
+    aromas: stringList(vintage?.aromas),
+    confidence: result.minimal.confidence,
+    country: result.wine.country,
+    data_sources: stringList(vintage?.data_sources),
+    description_long: vintage?.description_long ?? null,
+    description_short: vintage?.description_short ?? null,
+    drinking_window_end: vintage?.drinking_window_end ?? null,
+    drinking_window_start: vintage?.drinking_window_start ?? null,
+    food_pairing: vintage?.food_pairing ?? null,
+    grape_variety: result.wine.grape_variety,
+    notes: '',
+    price_max_eur: numberOrNull(vintage?.price_max_eur),
+    price_min_eur: numberOrNull(vintage?.price_min_eur),
+    producer: result.wine.producer,
+    region: result.wine.region,
+    serving_temperature: vintage?.serving_temperature ?? null,
+    taste_dryness: tasteDrynessOrNull(result.wine.taste_dryness),
+    vinification: vintage?.vinification ?? null,
+    vintage_year: vintage?.vintage_year ?? result.minimal.vintage_year,
+    wine_color: wineColorOrNull(result.wine.wine_color),
+    wine_name: result.wine.wine_name,
+  };
+}
+
+function extractionFromScanResult(result: ScanWineResult): WineExtraction {
+  if (result.source === 'fresh') {
+    return result.extraction;
+  }
+
+  if (result.source === 'cache') {
+    return vintageToExtraction(result);
+  }
+
+  return emptyExtractionFromMinimal(
+    result.minimal,
+    'Die Vorderseite war zu unsicher. Bitte scanne das Rücketikett oder gib die Daten später manuell ein.'
+  );
+}
+
+function getSourceHint(result: ScanWineResult) {
+  if (result.source === 'cache') {
+    return {
+      description: 'Anreicherung und Jahrgangsdaten kommen aus dem Cache.',
+      icon: 'flash-outline' as const,
+      title: 'Diesen Wein kennen wir schon',
+    };
+  }
+
+  if (result.source === 'fresh') {
+    return {
+      description: 'Der Wein wurde neu analysiert und global vorgemerkt.',
+      icon: 'sparkles-outline' as const,
+      title: 'Wein wurde frisch analysiert',
+    };
+  }
+
+  return {
+    description: 'Für eine sichere Erkennung brauchen wir eine zweite Ansicht.',
+    icon: 'scan-circle-outline' as const,
+    title: 'Weitere Infos nötig',
+  };
+}
+
 export default function ScanConfirmScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -161,6 +319,7 @@ export default function ScanConfirmScreen() {
   }>();
   const signedUrl = normalizeParam(params.signedUrl);
   const [extraction, setExtraction] = useState<WineExtraction | null>(null);
+  const [scanResult, setScanResult] = useState<ScanWineResult | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [loadingIndex, setLoadingIndex] = useState(0);
@@ -194,12 +353,14 @@ export default function ScanConfirmScreen() {
         setIsLoading(true);
         setErrorMessage(null);
         setExtraction(null);
+        setScanResult(null);
 
-        const result = await extractWineFromLabel(signedUrl);
+        const result = await scanWineFromLabel(signedUrl);
 
         if (!isMounted) return;
 
-        setExtraction(result);
+        setScanResult(result);
+        setExtraction(extractionFromScanResult(result));
       } catch (error: unknown) {
         if (!isMounted) return;
 
@@ -317,6 +478,8 @@ export default function ScanConfirmScreen() {
               <Text style={styles.title}>{buildTitle(extraction)}</Text>
               <ConfidenceBadge score={extraction.confidence.overall} />
             </View>
+
+            {scanResult ? <SourceHint result={scanResult} /> : null}
 
             {needsBackLabelScan(extraction) ? (
               <View style={styles.vintageWarningCard}>
@@ -455,6 +618,20 @@ function Section({
   );
 }
 
+function SourceHint({ result }: { result: ScanWineResult }) {
+  const hint = getSourceHint(result);
+
+  return (
+    <View style={styles.sourceHint}>
+      <Ionicons name={hint.icon} size={22} color={colors.primaryDark} />
+      <View style={styles.sourceHintText}>
+        <Text style={styles.sourceHintTitle}>{hint.title}</Text>
+        <Text style={styles.sourceHintDescription}>{hint.description}</Text>
+      </View>
+    </View>
+  );
+}
+
 function TextBlock({ label, text }: { label: string; text: string }) {
   return (
     <View style={styles.textBlock}>
@@ -582,6 +759,31 @@ const styles = StyleSheet.create({
     borderRadius: radii.lg,
     borderWidth: 1,
     overflow: 'hidden',
+  },
+  sourceHint: {
+    alignItems: 'flex-start',
+    backgroundColor: colors.surfaceWarm,
+    borderColor: colors.border,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: spacing.md,
+    marginTop: spacing.lg,
+    padding: spacing.lg,
+  },
+  sourceHintDescription: {
+    color: colors.textSecondary,
+    fontSize: typography.size.sm,
+    lineHeight: typography.lineHeight.sm,
+    marginTop: spacing.xs,
+  },
+  sourceHintText: {
+    flex: 1,
+  },
+  sourceHintTitle: {
+    color: colors.primaryDark,
+    fontSize: typography.size.base,
+    fontWeight: typography.weight.extraBold,
   },
   sourceRow: {
     alignItems: 'center',

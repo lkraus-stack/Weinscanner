@@ -7,10 +7,10 @@ import {
   requirePost,
   requireUser,
 } from '../_shared/http.ts';
-import { extractWineFull } from '../_shared/wine-analysis.ts';
+import { extractWineMinimal } from '../_shared/wine-analysis.ts';
 import { validateExtractWineRequest } from '../_shared/wine-schema.ts';
 
-const VANTERO_TIMEOUT_MS = 30_000;
+const VANTERO_TIMEOUT_MS = 15_000;
 
 serve(async (req) => {
   const corsResponse = handleCors(req);
@@ -23,13 +23,13 @@ serve(async (req) => {
     requirePost(req);
     await requireUser(req);
 
-    const payload = validateExtractWineRequest(await req.json());
+    const { imageUrl } = validateExtractWineRequest(await req.json());
     const abortController = new AbortController();
     const timeout = setTimeout(() => abortController.abort(), VANTERO_TIMEOUT_MS);
 
     try {
-      const extraction = await extractWineFull(
-        payload,
+      const extraction = await extractWineMinimal(
+        imageUrl,
         abortController.signal
       );
 
