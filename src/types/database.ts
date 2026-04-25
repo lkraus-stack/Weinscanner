@@ -367,6 +367,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      save_scan_atomic: { Args: { payload: Json }; Returns: Json }
       search_wines: {
         Args: {
           query_producer: string

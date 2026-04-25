@@ -9,6 +9,7 @@
     "lint": "expo lint",
     "dev:create-user": "tsx scripts/create-dev-user.ts",
     "test:extract-wine": "tsx scripts/test-extract-wine.ts",
+    "test:save-scan": "tsx scripts/test-save-scan.ts",
     "test:scan-wine": "tsx scripts/test-scan-wine.ts",
     "test:storage": "tsx scripts/test-storage.ts",
     "web": "expo start --web"

@@ -12,6 +12,10 @@ export const JSON_HEADERS = {
   'Content-Type': 'application/json',
 };
 
+export function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
 export function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     headers: JSON_HEADERS,
@@ -67,6 +71,24 @@ export function createServiceClient() {
       auth: {
         autoRefreshToken: false,
         persistSession: false,
+      },
+    }
+  );
+}
+
+export function createUserClient(token: string) {
+  return createClient(
+    Deno.env.get('SUPABASE_URL') ?? '',
+    Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+    {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+      },
+      global: {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
       },
     }
   );

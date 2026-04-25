@@ -1,9 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Linking,
   Pressable,
   ScrollView,
@@ -15,16 +17,24 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AromaPills } from '@/components/scan/AromaPills';
 import { ConfidenceBadge } from '@/components/scan/ConfidenceBadge';
+import {
+  EditWineModal,
+  type WineEditData,
+} from '@/components/scan/EditWineModal';
+import { VintageYearPicker } from '@/components/scan/VintageYearPicker';
 import { WineDetailRow } from '@/components/scan/WineDetailRow';
-import { scanWineFromLabel } from '@/lib/ai-client';
+import { saveScan, scanWineFromLabel } from '@/lib/ai-client';
+import { useToastStore } from '@/stores/toast-store';
 import { colors } from '@/theme/colors';
 import { radii, spacing } from '@/theme/spacing';
 import { typography } from '@/theme/typography';
 import type {
   MinimalWineExtraction,
+  SaveScanPayload,
   ScanWineResult,
   TasteDryness,
   VintageRecord,
+  WineCorrection,
   WineColor,
   WineExtraction,
 } from '@/types/wine-extraction';
@@ -132,13 +142,12 @@ function formatWineLabel(value: string | null) {
 function buildTitle(extraction: WineExtraction) {
   const producer = extraction.producer || 'Unbekanntes Weingut';
   const wineName = extraction.wine_name || 'Weinname nicht erkannt';
-  const vintage = extraction.vintage_year ? `, ${extraction.vintage_year}` : '';
 
   if (producer === wineName) {
-    return `${producer}${vintage}`;
+    return producer;
   }
 
-  return `${producer} • ${wineName}${vintage}`;
+  return `${producer} • ${wineName}`;
 }
 
 function buildLabelRows(extraction: WineExtraction): DisplayRow[] {
@@ -152,11 +161,6 @@ function buildLabelRows(extraction: WineExtraction): DisplayRow[] {
       confidence: extraction.confidence.wine_name,
       label: 'Wein',
       value: valueOrDash(extraction.wine_name),
-    },
-    {
-      confidence: extraction.confidence.vintage_year,
-      label: 'Jahrgang',
-      value: valueOrDash(extraction.vintage_year),
     },
     { label: 'Region', value: valueOrDash(extraction.region) },
     { label: 'Land', value: valueOrDash(extraction.country) },
@@ -204,7 +208,79 @@ function hasEnrichment(extraction: WineExtraction) {
 }
 
 function needsBackLabelScan(extraction: WineExtraction) {
-  return extraction.vintage_year === null;
+  return (
+    extraction.vintage_year === null ||
+    extraction.confidence.vintage_year < 0.5
+  );
+}
+
+function extractionToWineData(extraction: WineExtraction): WineEditData {
+  return {
+    alcohol_percent: extraction.alcohol_percent,
+    appellation: extraction.appellation,
+    country: extraction.country,
+    grape_variety: extraction.grape_variety,
+    producer: extraction.producer,
+    region: extraction.region,
+    taste_dryness: extraction.taste_dryness,
+    wine_color: extraction.wine_color,
+    wine_name: extraction.wine_name,
+  };
+}
+
+function wineDataToExtraction(
+  extraction: WineExtraction,
+  wineData: WineEditData
+): WineExtraction {
+  return {
+    ...extraction,
+    alcohol_percent: wineData.alcohol_percent,
+    appellation: wineData.appellation,
+    country: wineData.country,
+    grape_variety: wineData.grape_variety,
+    producer: wineData.producer,
+    region: wineData.region,
+    taste_dryness: wineData.taste_dryness,
+    wine_color: wineData.wine_color,
+    wine_name: wineData.wine_name,
+  };
+}
+
+function correctionValue(value: unknown) {
+  if (value === null || value === undefined) {
+    return '';
+  }
+
+  return String(value);
+}
+
+function buildCorrections(
+  original: WineExtraction | null,
+  current: WineExtraction
+): WineCorrection[] {
+  if (!original) {
+    return [];
+  }
+
+  const fields: (keyof WineEditData)[] = [
+    'producer',
+    'wine_name',
+    'region',
+    'country',
+    'appellation',
+    'grape_variety',
+    'wine_color',
+    'taste_dryness',
+    'alcohol_percent',
+  ];
+
+  return fields
+    .map((field) => ({
+      ai_value: correctionValue(original[field]),
+      field,
+      user_value: correctionValue(current[field]),
+    }))
+    .filter((correction) => correction.ai_value !== correction.user_value);
 }
 
 function emptyExtractionFromMinimal(
@@ -310,18 +386,104 @@ function getSourceHint(result: ScanWineResult) {
   };
 }
 
+function getKnownYears(result: ScanWineResult | null) {
+  if (!result || result.source !== 'cache') {
+    return [];
+  }
+
+  return result.vintages
+    .map((vintage) => vintage.vintage_year)
+    .filter((year): year is number => typeof year === 'number');
+}
+
+function getWineId(result: ScanWineResult | null) {
+  if (!result || result.source === 'low_confidence') {
+    return null;
+  }
+
+  return result.wine.id;
+}
+
+function getAnalysisVintageId(result: ScanWineResult | null) {
+  if (!result || result.source === 'low_confidence') {
+    return null;
+  }
+
+  return result.matchedVintage?.id ?? null;
+}
+
+function getSaveSource(result: ScanWineResult | null): SaveScanPayload['source'] {
+  if (!result || result.source === 'low_confidence') {
+    return 'manual';
+  }
+
+  return result.source;
+}
+
+function buildSavePayload({
+  corrections,
+  extraction,
+  imageUrl,
+  scanResult,
+  selectedVintageYear,
+  storagePath,
+}: {
+  corrections: WineCorrection[];
+  extraction: WineExtraction;
+  imageUrl: string;
+  scanResult: ScanWineResult | null;
+  selectedVintageYear: number;
+  storagePath: string;
+}): SaveScanPayload {
+  return {
+    analysisVintageId: getAnalysisVintageId(scanResult),
+    bottleStoragePath: null,
+    corrections,
+    imageUrl,
+    selectedVintageYear,
+    source: getSaveSource(scanResult),
+    storagePath,
+    vintageData: {
+      ai_confidence: extraction.confidence.overall,
+      alcohol_percent: extraction.alcohol_percent,
+      aromas: extraction.aromas,
+      data_sources: extraction.data_sources,
+      description_long: extraction.description_long,
+      description_short: extraction.description_short,
+      drinking_window_end: extraction.drinking_window_end,
+      drinking_window_start: extraction.drinking_window_start,
+      food_pairing: extraction.food_pairing,
+      price_max_eur: extraction.price_max_eur,
+      price_min_eur: extraction.price_min_eur,
+      serving_temperature: extraction.serving_temperature,
+      vinification: extraction.vinification,
+    },
+    wineData: extractionToWineData(extraction),
+    wineId: getWineId(scanResult),
+  };
+}
+
 export default function ScanConfirmScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const showToast = useToastStore((state) => state.showToast);
   const params = useLocalSearchParams<{
     signedUrl?: string;
     storagePath?: string;
   }>();
   const signedUrl = normalizeParam(params.signedUrl);
+  const storagePath = normalizeParam(params.storagePath);
   const [extraction, setExtraction] = useState<WineExtraction | null>(null);
+  const [originalExtraction, setOriginalExtraction] =
+    useState<WineExtraction | null>(null);
   const [scanResult, setScanResult] = useState<ScanWineResult | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [selectedVintageYear, setSelectedVintageYear] = useState<number | null>(
+    null
+  );
   const [isLoading, setIsLoading] = useState(true);
+  const [isEditModalVisible, setIsEditModalVisible] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [loadingIndex, setLoadingIndex] = useState(0);
   const [retryToken, setRetryToken] = useState(0);
 
@@ -353,14 +515,19 @@ export default function ScanConfirmScreen() {
         setIsLoading(true);
         setErrorMessage(null);
         setExtraction(null);
+        setOriginalExtraction(null);
         setScanResult(null);
+        setSelectedVintageYear(null);
 
         const result = await scanWineFromLabel(signedUrl);
 
         if (!isMounted) return;
 
+        const normalizedExtraction = extractionFromScanResult(result);
+
         setScanResult(result);
-        setExtraction(extractionFromScanResult(result));
+        setOriginalExtraction(normalizedExtraction);
+        setExtraction(normalizedExtraction);
       } catch (error: unknown) {
         if (!isMounted) return;
 
@@ -392,6 +559,19 @@ export default function ScanConfirmScreen() {
     () => (extraction ? buildEnrichmentRows(extraction) : []),
     [extraction]
   );
+  const knownYears = useMemo(() => getKnownYears(scanResult), [scanResult]);
+  const corrections = useMemo(
+    () => (extraction ? buildCorrections(originalExtraction, extraction) : []),
+    [extraction, originalExtraction]
+  );
+  const canSave = Boolean(
+    selectedVintageYear !== null &&
+      extraction?.producer.trim() &&
+      extraction?.wine_name.trim() &&
+      storagePath &&
+      signedUrl &&
+      !isSaving
+  );
 
   function goToHistory() {
     router.replace('/(app)');
@@ -403,6 +583,55 @@ export default function ScanConfirmScreen() {
 
   function retryAnalysis() {
     setRetryToken((currentToken) => currentToken + 1);
+  }
+
+  function openEditModal() {
+    setIsEditModalVisible(true);
+  }
+
+  function saveEditedWine(wineData: WineEditData) {
+    setExtraction((currentExtraction) =>
+      currentExtraction
+        ? wineDataToExtraction(currentExtraction, wineData)
+        : currentExtraction
+    );
+    setIsEditModalVisible(false);
+  }
+
+  async function saveConfirmedScan() {
+    if (!extraction || !signedUrl || !storagePath || selectedVintageYear === null) {
+      return;
+    }
+
+    try {
+      setIsSaving(true);
+      await saveScan(
+        buildSavePayload({
+          corrections,
+          extraction,
+          imageUrl: signedUrl,
+          scanResult,
+          selectedVintageYear,
+          storagePath,
+        })
+      );
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      showToast('Wein gespeichert');
+      router.replace('/(app)');
+    } catch (error: unknown) {
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'Wein konnte nicht gespeichert werden.';
+
+      Alert.alert('Speichern fehlgeschlagen', message, [
+        { text: 'Abbrechen', style: 'cancel' },
+        { text: 'Erneut versuchen', onPress: saveConfirmedScan },
+      ]);
+    } finally {
+      setIsSaving(false);
+    }
   }
 
   function scanBackLabel() {
@@ -476,10 +705,29 @@ export default function ScanConfirmScreen() {
             <View style={styles.summary}>
               <Text style={styles.eyebrow}>Erkannter Wein</Text>
               <Text style={styles.title}>{buildTitle(extraction)}</Text>
-              <ConfidenceBadge score={extraction.confidence.overall} />
+              <View style={styles.summaryActions}>
+                <ConfidenceBadge score={extraction.confidence.overall} />
+                <Pressable onPress={openEditModal} style={styles.editButton}>
+                  <Ionicons
+                    name="create-outline"
+                    size={18}
+                    color={colors.primaryDark}
+                  />
+                  <Text style={styles.editButtonText}>Bearbeiten</Text>
+                </Pressable>
+              </View>
             </View>
 
             {scanResult ? <SourceHint result={scanResult} /> : null}
+
+            <Section title="Jahrgang">
+              <VintageYearPicker
+                knownYears={knownYears}
+                onChange={setSelectedVintageYear}
+                suggestedYear={scanResult?.minimal.vintage_year ?? null}
+                value={selectedVintageYear}
+              />
+            </Section>
 
             {needsBackLabelScan(extraction) ? (
               <View style={styles.vintageWarningCard}>
@@ -592,13 +840,30 @@ export default function ScanConfirmScreen() {
               <Pressable onPress={discardScan} style={styles.secondaryButton}>
                 <Text style={styles.secondaryButtonText}>Verwerfen</Text>
               </Pressable>
-              <Pressable onPress={goToHistory} style={styles.primaryButton}>
-                <Text style={styles.primaryButtonText}>OK</Text>
+              <Pressable
+                disabled={!canSave}
+                onPress={saveConfirmedScan}
+                style={[styles.primaryButton, !canSave && styles.disabledButton]}
+              >
+                {isSaving ? (
+                  <ActivityIndicator color={colors.white} />
+                ) : (
+                  <Text style={styles.primaryButtonText}>Wein speichern</Text>
+                )}
               </Pressable>
             </View>
           </>
         ) : null}
       </ScrollView>
+
+      {extraction ? (
+        <EditWineModal
+          onClose={() => setIsEditModalVisible(false)}
+          onSave={saveEditedWine}
+          value={extractionToWineData(extraction)}
+          visible={isEditModalVisible}
+        />
+      ) : null}
     </View>
   );
 }
@@ -670,6 +935,26 @@ const styles = StyleSheet.create({
   content: {
     flexGrow: 1,
     padding: spacing.screenX,
+  },
+  disabledButton: {
+    opacity: 0.45,
+  },
+  editButton: {
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: radii.pill,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: spacing.xs,
+    minHeight: 38,
+    paddingHorizontal: spacing.md,
+  },
+  editButtonText: {
+    color: colors.primaryDark,
+    fontSize: typography.size.sm,
+    fontWeight: typography.weight.extraBold,
   },
   errorActions: {
     flexDirection: 'row',
@@ -801,6 +1086,12 @@ const styles = StyleSheet.create({
   summary: {
     gap: spacing.sm,
     marginTop: spacing.xl,
+  },
+  summaryActions: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.md,
   },
   textBlock: {
     backgroundColor: colors.surfaceWarm,

@@ -1,5 +1,7 @@
 import { supabase } from '@/lib/supabase';
 import type {
+  SaveScanPayload,
+  SaveScanResult,
   ScanWineResult,
   WineExtraction,
 } from '@/types/wine-extraction';
@@ -97,6 +99,30 @@ export async function scanWineFromLabel(
 
   if (!data) {
     throw new Error('Etikett konnte nicht analysiert werden.');
+  }
+
+  if (isErrorResponse(data)) {
+    throw new Error(data.error);
+  }
+
+  return data;
+}
+
+export async function saveScan(
+  payload: SaveScanPayload
+): Promise<SaveScanResult> {
+  const { data, error } = await supabase.functions.invoke<
+    EdgeFunctionResponse<SaveScanResult>
+  >('save-scan', {
+    body: payload,
+  });
+
+  if (error) {
+    throw new Error(await getFunctionErrorMessage(error));
+  }
+
+  if (!data) {
+    throw new Error('Wein konnte nicht gespeichert werden.');
   }
 
   if (isErrorResponse(data)) {
