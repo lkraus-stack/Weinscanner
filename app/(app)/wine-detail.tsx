@@ -16,6 +16,11 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import {
+  createEmptyRatingFormValue,
+  RatingModal,
+  type RatingFormValue,
+} from '@/components/ratings/RatingModal';
 import { VintageYearPicker } from '@/components/scan/VintageYearPicker';
 import { AromaGrid } from '@/components/wine-detail/AromaGrid';
 import {
@@ -24,7 +29,14 @@ import {
   useScanDetail,
 } from '@/hooks/useScanDetail';
 import { useWineVintages } from '@/hooks/useWineVintages';
+import {
+  getRatingForScan,
+  type RatingRecord,
+  saveRating,
+  updateRating,
+} from '@/lib/ratings';
 import { supabase } from '@/lib/supabase';
+import { useToastStore } from '@/stores/toast-store';
 import { colors } from '@/theme/colors';
 import { radii, spacing } from '@/theme/spacing';
 import { typography } from '@/theme/typography';
@@ -205,6 +217,21 @@ function getVisibleRating(ratings: ScanDetailRating[]) {
   );
 }
 
+function ratingToFormValue(
+  rating: RatingRecord | ScanDetailRating | null
+): RatingFormValue {
+  if (!rating) {
+    return createEmptyRatingFormValue();
+  }
+
+  return {
+    drankAt: rating.drank_at ?? createEmptyRatingFormValue().drankAt,
+    notes: rating.notes ?? '',
+    occasion: rating.occasion ?? '',
+    stars: rating.stars ?? 0,
+  };
+}
+
 async function reassignScanVintage({
   scanId,
   targetVintageYear,
@@ -354,6 +381,7 @@ function WineDetailContent({
 }) {
   const queryClient = useQueryClient();
   const router = useRouter();
+  const showToast = useToastStore((state) => state.showToast);
   const imageUrl = detail.labelImageUrl ?? detail.bottleImageUrl;
   const rating = getVisibleRating(detail.ratings);
   const vintage = detail.vintage;
@@ -366,6 +394,12 @@ function WineDetailContent({
   );
   const [isCorrectionModalVisible, setIsCorrectionModalVisible] =
     useState(false);
+  const [isRatingModalVisible, setIsRatingModalVisible] = useState(false);
+  const [activeRating, setActiveRating] = useState<
+    RatingRecord | ScanDetailRating | null
+  >(rating);
+  const [ratingInitialValue, setRatingInitialValue] =
+    useState<RatingFormValue>(() => ratingToFormValue(rating));
   const [isVintageModalVisible, setIsVintageModalVisible] = useState(false);
   const [selectedVintageYear, setSelectedVintageYear] = useState<number | null>(
     currentVintageYear
@@ -376,6 +410,7 @@ function WineDetailContent({
   const hasRecommendation = Boolean(
     hasText(vintage?.serving_temperature) || hasText(vintage?.food_pairing)
   );
+  const ratingSubmitLabel = activeRating ? 'Aktualisieren' : 'Speichern';
 
   useEffect(() => {
     if (isVintageModalVisible) {
@@ -412,14 +447,75 @@ function WineDetailContent({
     },
     onSuccess: async () => {
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      await queryClient.invalidateQueries({ queryKey: ['history'] });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['history'] }),
+        queryClient.invalidateQueries({ queryKey: ['ratings'] }),
+      ]);
       router.replace('/(app)');
     },
   });
 
-  async function showRatingStub() {
-    await Haptics.selectionAsync();
-    Alert.alert('Bewertungs-Modal kommt in Sprint 12');
+  const saveRatingMutation = useMutation({
+    mutationFn: async (value: RatingFormValue) => {
+      if (!vintage) {
+        throw new Error('Jahrgang fehlt.');
+      }
+
+      if (activeRating) {
+        return updateRating(activeRating.id, {
+          drank_at: value.drankAt,
+          notes: value.notes,
+          occasion: value.occasion,
+          stars: value.stars,
+        });
+      }
+
+      return saveRating({
+        drankAt: value.drankAt,
+        notes: value.notes,
+        occasion: value.occasion,
+        scanId: detail.id,
+        stars: value.stars,
+        vintageId: vintage.id,
+      });
+    },
+    onError: async (error: unknown, value) => {
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert('Bewertung konnte nicht gespeichert werden', getErrorMessage(error), [
+        { text: 'Abbrechen', style: 'cancel' },
+        {
+          onPress: () => saveRatingMutation.mutate(value),
+          text: 'Erneut versuchen',
+        },
+      ]);
+    },
+    onSuccess: async (savedRating) => {
+      const wasUpdate = Boolean(activeRating);
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setActiveRating(savedRating);
+      setRatingInitialValue(ratingToFormValue(savedRating));
+      setIsRatingModalVisible(false);
+      showToast(wasUpdate ? 'Bewertung aktualisiert' : 'Bewertung gespeichert');
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['scan-detail', detail.id] }),
+        queryClient.invalidateQueries({ queryKey: ['history'] }),
+        queryClient.invalidateQueries({ queryKey: ['ratings'] }),
+      ]);
+    },
+  });
+
+  async function openRatingModal() {
+    try {
+      await Haptics.selectionAsync();
+      const existingRating = await getRatingForScan(detail.id);
+      const nextRating = existingRating ?? rating;
+      setActiveRating(nextRating);
+      setRatingInitialValue(ratingToFormValue(nextRating));
+      setIsRatingModalVisible(true);
+    } catch (error: unknown) {
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert('Bewertung konnte nicht geladen werden', getErrorMessage(error));
+    }
   }
 
   async function showInventoryStub() {
@@ -553,13 +649,25 @@ function WineDetailContent({
 
         <DetailActions
           isBusy={
-            reassignVintageMutation.isPending || deleteScanMutation.isPending
+            reassignVintageMutation.isPending ||
+            deleteScanMutation.isPending ||
+            saveRatingMutation.isPending
           }
           onCorrect={openCorrectionModal}
           onInventory={showInventoryStub}
-          onRate={showRatingStub}
+          onRate={openRatingModal}
         />
       </ScrollView>
+
+      <RatingModal
+        initialValue={ratingInitialValue}
+        isSaving={saveRatingMutation.isPending}
+        onClose={() => setIsRatingModalVisible(false)}
+        onSubmit={(value) => saveRatingMutation.mutate(value)}
+        submitLabel={ratingSubmitLabel}
+        visible={isRatingModalVisible}
+        wineTitle={buildTitle(detail)}
+      />
 
       <CorrectionModal
         isDeleting={deleteScanMutation.isPending}

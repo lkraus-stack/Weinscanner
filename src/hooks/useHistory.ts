@@ -18,6 +18,8 @@ export type HistoryItemRecord = {
   labelImagePath: string | null;
   labelImageUrl: string | null;
   producer: string;
+  ratingId: string | null;
+  ratingStars: number | null;
   region: string | null;
   scannedAt: string;
   scanId: string;
@@ -33,6 +35,8 @@ type HistoryRpcRow = {
   grape_variety: string | null;
   label_image_path: string | null;
   producer: string;
+  rating_id: string | null;
+  rating_stars: number | null;
   region: string | null;
   scanned_at: string;
   scan_id: string;
@@ -109,6 +113,8 @@ function mapHistoryRow(
       ? (signedUrlMap.get(row.label_image_path) ?? null)
       : null,
     producer: row.producer,
+    ratingId: row.rating_id,
+    ratingStars: row.rating_stars,
     region: row.region,
     scannedAt: row.scanned_at,
     scanId: row.scan_id,

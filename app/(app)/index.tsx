@@ -1,8 +1,11 @@
 import { FlashList, type ListRenderItemInfo } from '@shopify/flash-list';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   RefreshControl,
   StyleSheet,
   Text,
@@ -16,10 +19,22 @@ import { HistoryItem } from '@/components/history/HistoryItem';
 import { HistorySearchBar } from '@/components/history/HistorySearchBar';
 import { MonthHeader } from '@/components/history/MonthHeader';
 import {
+  createEmptyRatingFormValue,
+  RatingModal,
+  type RatingFormValue,
+} from '@/components/ratings/RatingModal';
+import {
   type HistoryItemRecord,
   useHistory,
   type WineColor,
 } from '@/hooks/useHistory';
+import {
+  getRatingForScan,
+  type RatingRecord,
+  saveRating,
+  updateRating,
+} from '@/lib/ratings';
+import { useToastStore } from '@/stores/toast-store';
 import { colors } from '@/theme/colors';
 import { spacing } from '@/theme/spacing';
 import { typography } from '@/theme/typography';
@@ -71,11 +86,55 @@ function buildRows(items: HistoryItemRecord[]) {
   return { rows, stickyHeaderIndices };
 }
 
+function getErrorMessage(error: unknown) {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+
+  return 'Bitte versuche es noch einmal.';
+}
+
+function ratingToFormValue(rating: RatingRecord | null): RatingFormValue {
+  if (!rating) {
+    return createEmptyRatingFormValue();
+  }
+
+  return {
+    drankAt: rating.drank_at ?? createEmptyRatingFormValue().drankAt,
+    notes: rating.notes ?? '',
+    occasion: rating.occasion ?? '',
+    stars: rating.stars ?? 0,
+  };
+}
+
+function buildWineTitle(item: HistoryItemRecord | null) {
+  if (!item) {
+    return 'Wein bewerten';
+  }
+
+  const baseTitle =
+    item.producer === item.wineName
+      ? item.producer
+      : `${item.producer} ${item.wineName}`;
+
+  return `${baseTitle}, ${item.vintageYear}`;
+}
+
 export default function HistoryScreen() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const insets = useSafeAreaInsets();
+  const showToast = useToastStore((state) => state.showToast);
   const [wineColor, setWineColor] = useState<WineColor | undefined>();
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedRatingItem, setSelectedRatingItem] =
+    useState<HistoryItemRecord | null>(null);
+  const [selectedRating, setSelectedRating] = useState<RatingRecord | null>(
+    null
+  );
+  const [ratingInitialValue, setRatingInitialValue] =
+    useState<RatingFormValue>(() => createEmptyRatingFormValue());
+  const [isRatingModalVisible, setIsRatingModalVisible] = useState(false);
   const historyQuery = useHistory({ searchQuery, wineColor });
   const items = useMemo(
     () => historyQuery.data?.pages.flatMap((page) => page.data) ?? [],
@@ -87,6 +146,7 @@ export default function HistoryScreen() {
   );
   const isInitialLoading = historyQuery.isLoading;
   const hasActiveFilters = Boolean(wineColor || searchQuery.trim().length > 1);
+  const ratingSubmitLabel = selectedRating ? 'Aktualisieren' : 'Speichern';
 
   const openDetail = useCallback(
     (item: HistoryItemRecord) => {
@@ -97,6 +157,75 @@ export default function HistoryScreen() {
     },
     [router]
   );
+
+  async function invalidateRatingCaches(scanId: string) {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['history'] }),
+      queryClient.invalidateQueries({ queryKey: ['ratings'] }),
+      queryClient.invalidateQueries({ queryKey: ['scan-detail', scanId] }),
+    ]);
+  }
+
+  const saveRatingMutation = useMutation({
+    mutationFn: async (value: RatingFormValue) => {
+      if (!selectedRatingItem) {
+        throw new Error('Scan fehlt.');
+      }
+
+      if (selectedRating) {
+        return updateRating(selectedRating.id, {
+          drank_at: value.drankAt,
+          notes: value.notes,
+          occasion: value.occasion,
+          stars: value.stars,
+        });
+      }
+
+      return saveRating({
+        drankAt: value.drankAt,
+        notes: value.notes,
+        occasion: value.occasion,
+        scanId: selectedRatingItem.scanId,
+        stars: value.stars,
+        vintageId: selectedRatingItem.vintageId,
+      });
+    },
+    onError: async (error: unknown, value) => {
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert('Bewertung konnte nicht gespeichert werden', getErrorMessage(error), [
+        { text: 'Abbrechen', style: 'cancel' },
+        {
+          onPress: () => saveRatingMutation.mutate(value),
+          text: 'Erneut versuchen',
+        },
+      ]);
+    },
+    onSuccess: async () => {
+      if (!selectedRatingItem) {
+        return;
+      }
+
+      const wasUpdate = Boolean(selectedRating);
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setIsRatingModalVisible(false);
+      showToast(wasUpdate ? 'Bewertung aktualisiert' : 'Bewertung gespeichert');
+      await invalidateRatingCaches(selectedRatingItem.scanId);
+    },
+  });
+
+  const openRatingModal = useCallback(async (item: HistoryItemRecord) => {
+    try {
+      await Haptics.selectionAsync();
+      const existingRating = await getRatingForScan(item.scanId);
+      setSelectedRatingItem(item);
+      setSelectedRating(existingRating);
+      setRatingInitialValue(ratingToFormValue(existingRating));
+      setIsRatingModalVisible(true);
+    } catch (error: unknown) {
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert('Bewertung konnte nicht geladen werden', getErrorMessage(error));
+    }
+  }, []);
 
   const loadMore = useCallback(() => {
     if (historyQuery.hasNextPage && !historyQuery.isFetchingNextPage) {
@@ -110,9 +239,15 @@ export default function HistoryScreen() {
         return <MonthHeader title={item.title} />;
       }
 
-      return <HistoryItem item={item.item} onPress={openDetail} />;
+      return (
+        <HistoryItem
+          item={item.item}
+          onPress={openDetail}
+          onRate={openRatingModal}
+        />
+      );
     },
-    [openDetail]
+    [openDetail, openRatingModal]
   );
 
   const renderFooter = useCallback(() => {
@@ -207,6 +342,16 @@ export default function HistoryScreen() {
           />
         }
         contentContainerStyle={styles.listContent}
+      />
+
+      <RatingModal
+        initialValue={ratingInitialValue}
+        isSaving={saveRatingMutation.isPending}
+        onClose={() => setIsRatingModalVisible(false)}
+        onSubmit={(value) => saveRatingMutation.mutate(value)}
+        submitLabel={ratingSubmitLabel}
+        visible={isRatingModalVisible}
+        wineTitle={buildWineTitle(selectedRatingItem)}
       />
     </View>
   );

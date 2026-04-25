@@ -168,7 +168,7 @@ export type Database = {
           occasion?: string | null
           scan_id?: string | null
           stars?: number | null
-          user_id: string
+          user_id?: string
           vintage_id: string
         }
         Update: {
@@ -379,6 +379,8 @@ export type Database = {
           grape_variety: string
           label_image_path: string
           producer: string
+          rating_id: string | null
+          rating_stars: number | null
           region: string
           scan_id: string
           scanned_at: string

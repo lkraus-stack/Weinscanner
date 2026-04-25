@@ -26,18 +26,20 @@ const COLOR_SWATCHES: Record<WineColor, string> = {
 type Props = {
   item: HistoryItemRecord;
   onPress: (item: HistoryItemRecord) => void;
+  onRate: (item: HistoryItemRecord) => void;
 };
 
 function joinMeta(parts: (string | null | undefined)[]) {
   return parts.filter(Boolean).join(', ');
 }
 
-export function HistoryItem({ item, onPress }: Props) {
+export function HistoryItem({ item, onPress, onRate }: Props) {
   const regionLine = joinMeta([item.region, item.country]);
   const colorLabel = item.wineColor ? COLOR_LABELS[item.wineColor] : 'Unklar';
   const swatchColor = item.wineColor
     ? COLOR_SWATCHES[item.wineColor]
     : colors.border;
+  const hasRating = typeof item.ratingStars === 'number';
 
   return (
     <Pressable
@@ -59,6 +61,20 @@ export function HistoryItem({ item, onPress }: Props) {
         ) : (
           <Ionicons name="wine-outline" size={28} color={colors.primaryDark} />
         )}
+
+        {hasRating ? (
+          <Pressable
+            accessibilityLabel="Bewertung bearbeiten"
+            accessibilityRole="button"
+            onPress={(event) => {
+              event.stopPropagation();
+              onRate(item);
+            }}
+            style={styles.ratingBadge}
+          >
+            <Text style={styles.ratingBadgeText}>★ {item.ratingStars}</Text>
+          </Pressable>
+        ) : null}
       </View>
 
       <View style={styles.content}>
@@ -91,6 +107,23 @@ export function HistoryItem({ item, onPress }: Props) {
             />
             <Text style={styles.colorLabel}>{colorLabel}</Text>
           </View>
+          {!hasRating ? (
+            <Pressable
+              accessibilityRole="button"
+              onPress={(event) => {
+                event.stopPropagation();
+                onRate(item);
+              }}
+              style={styles.rateButton}
+            >
+              <Ionicons
+                name="star-outline"
+                size={14}
+                color={colors.primaryDark}
+              />
+              <Text style={styles.rateButtonText}>Bewerten</Text>
+            </Pressable>
+          ) : null}
           <Ionicons
             name="chevron-forward"
             size={18}
@@ -150,6 +183,41 @@ const styles = StyleSheet.create({
   },
   pressed: {
     opacity: 0.78,
+  },
+  rateButton: {
+    alignItems: 'center',
+    backgroundColor: colors.surfaceWarm,
+    borderColor: colors.border,
+    borderRadius: radii.pill,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: spacing.xs,
+    minHeight: 30,
+    paddingHorizontal: spacing.sm,
+  },
+  rateButtonText: {
+    color: colors.primaryDark,
+    fontSize: typography.size.xs,
+    fontWeight: typography.weight.extraBold,
+  },
+  ratingBadge: {
+    alignItems: 'center',
+    backgroundColor: colors.text,
+    borderColor: colors.surface,
+    borderRadius: radii.pill,
+    borderWidth: 1,
+    bottom: spacing.xs,
+    justifyContent: 'center',
+    minHeight: 28,
+    minWidth: 46,
+    paddingHorizontal: spacing.sm,
+    position: 'absolute',
+    right: spacing.xs,
+  },
+  ratingBadgeText: {
+    color: colors.white,
+    fontSize: typography.size.xs,
+    fontWeight: typography.weight.black,
   },
   swatch: {
     borderColor: colors.border,
