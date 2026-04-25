@@ -1,10 +1,14 @@
+import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
-import { Alert, StyleSheet, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import * as Sentry from 'sentry-expo';
 
 import { EmptyState } from '@/components/empty-state';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/auth-store';
 import { colors } from '@/theme/colors';
+import { radii, spacing } from '@/theme/spacing';
+import { typography } from '@/theme/typography';
 
 function getErrorMessage(error: unknown) {
   if (error instanceof Error) {
@@ -35,6 +39,14 @@ export default function ProfileScreen() {
     }
   }
 
+  function handleSentryTest() {
+    Sentry.Native.captureException(new Error('Sentry Test'));
+    Alert.alert(
+      'Sentry-Test gesendet',
+      'Wenn ein echter DSN gesetzt ist, sollte der Fehler gleich im Dashboard erscheinen.',
+    );
+  }
+
   return (
     <View style={styles.screen}>
       <EmptyState
@@ -47,14 +59,52 @@ export default function ProfileScreen() {
           isLoading: isSigningOut,
         }}
       />
+
+      {__DEV__ ? (
+        <Pressable
+          accessibilityRole="button"
+          style={({ pressed }) => [
+            styles.sentryButton,
+            pressed && styles.sentryButtonPressed,
+          ]}
+          onPress={handleSentryTest}
+        >
+          <Ionicons name="bug-outline" size={18} color={colors.primaryDark} />
+          <Text style={styles.sentryButtonText}>
+            Sentry Test-Fehler senden
+          </Text>
+        </Pressable>
+      ) : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   screen: {
+    alignItems: 'center',
     backgroundColor: colors.background,
     flex: 1,
+    gap: spacing.xl,
     justifyContent: 'center',
+  },
+  sentryButton: {
+    alignItems: 'center',
+    backgroundColor: colors.surfaceWarm,
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: spacing.sm,
+    minHeight: 44,
+    paddingHorizontal: spacing.lg,
+  },
+  sentryButtonPressed: {
+    opacity: 0.74,
+  },
+  sentryButtonText: {
+    color: colors.primaryDark,
+    fontSize: typography.size.sm,
+    fontWeight: typography.weight.extraBold,
+    letterSpacing: 0,
   },
 });

@@ -47,6 +47,15 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     'expo-router',
     'expo-secure-store',
     'expo-apple-authentication',
+    '@react-native-community/datetimepicker',
+    'sentry-expo',
+    [
+      '@sentry/react-native',
+      {
+        organization: process.env.SENTRY_ORG,
+        project: process.env.SENTRY_PROJECT,
+      },
+    ],
     [
       'expo-camera',
       {

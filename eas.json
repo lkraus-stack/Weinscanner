@@ -6,18 +6,30 @@
     "development": {
       "developmentClient": true,
       "distribution": "internal",
+      "env": {
+        "SENTRY_ORG": "replace-with-sentry-org",
+        "SENTRY_PROJECT": "wine-scanner"
+      },
       "ios": {
         "simulator": true
       }
     },
     "preview": {
       "distribution": "internal",
+      "env": {
+        "SENTRY_ORG": "replace-with-sentry-org",
+        "SENTRY_PROJECT": "wine-scanner"
+      },
       "ios": {
         "simulator": false
       }
     },
     "production": {
-      "autoIncrement": true
+      "autoIncrement": true,
+      "env": {
+        "SENTRY_ORG": "replace-with-sentry-org",
+        "SENTRY_PROJECT": "wine-scanner"
+      }
     }
   },
   "submit": {
