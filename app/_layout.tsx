@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import * as Sentry from '@sentry/react-native';
 import * as SplashScreen from 'expo-splash-screen';
 import { Stack, useRouter, useSegments } from 'expo-router';
-import * as Sentry from 'sentry-expo';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
@@ -9,11 +9,15 @@ import { Toast } from '@/components/toast';
 import { useAuth } from '@/hooks/useAuth';
 import { colors } from '@/theme/colors';
 
-Sentry.init({
-  dsn: process.env.EXPO_PUBLIC_SENTRY_DSN,
-  enableInExpoDevelopment: false,
-  debug: __DEV__,
-});
+const sentryDsn = process.env.EXPO_PUBLIC_SENTRY_DSN;
+
+if (sentryDsn) {
+  Sentry.init({
+    debug: false,
+    dsn: sentryDsn,
+    enabled: !__DEV__,
+  });
+}
 
 SplashScreen.preventAutoHideAsync().catch(() => null);
 

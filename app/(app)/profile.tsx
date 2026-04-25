@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import * as Sentry from '@sentry/react-native';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import Constants from 'expo-constants';
 import * as Haptics from 'expo-haptics';
@@ -18,7 +19,6 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import * as Sentry from 'sentry-expo';
 
 import { DeleteAccountModal } from '@/components/profile/DeleteAccountModal';
 import {
@@ -56,6 +56,7 @@ const THEME_OPTIONS: ThemeOption[] = [
   { label: 'Hell', value: 'light' },
   { label: 'Dunkel', value: 'dark' },
 ];
+const sentryDsn = process.env.EXPO_PUBLIC_SENTRY_DSN;
 
 function getErrorMessage(error: unknown) {
   if (error instanceof Error && error.message) {
@@ -200,7 +201,15 @@ export default function ProfileScreen() {
   }
 
   function handleSentryTest() {
-    Sentry.Native.captureException(new Error('Sentry Test'));
+    if (!sentryDsn) {
+      Alert.alert(
+        'Sentry nicht aktiv',
+        'Es ist noch kein Sentry DSN in der App-Konfiguration gesetzt.'
+      );
+      return;
+    }
+
+    Sentry.captureException(new Error('Sentry Test'));
     Alert.alert(
       'Sentry-Test gesendet',
       'Wenn ein echter DSN gesetzt ist, sollte der Fehler gleich im Dashboard erscheinen.'
