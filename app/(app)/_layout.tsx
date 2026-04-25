@@ -103,6 +103,12 @@ export default function AppLayout() {
           href: null,
         }}
       />
+      <Tabs.Screen
+        name="scan-confirm"
+        options={{
+          href: null,
+        }}
+      />
     </Tabs>
   );
 }

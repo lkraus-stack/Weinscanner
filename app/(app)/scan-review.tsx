@@ -19,14 +19,11 @@ import { UploadOverlay } from '@/components/scan/UploadOverlay';
 import { useScanFlow } from '@/hooks/useScanFlow';
 import { cropImage, getImageDimensions, type CropRect } from '@/lib/image';
 import { uploadWineLabel } from '@/lib/storage';
-import { useToastStore } from '@/stores/toast-store';
 import { colors } from '@/theme/colors';
 import { radii, spacing } from '@/theme/spacing';
 import { typography } from '@/theme/typography';
 
 type CropPreset = 'original' | 'label' | 'square';
-
-const SUCCESS_MESSAGE = 'Foto hochgeladen. KI-Analyse kommt in Sprint 06.';
 
 function normalizeParam(value: string | string[] | undefined) {
   if (Array.isArray(value)) {
@@ -87,7 +84,6 @@ export default function ScanReviewScreen() {
   const initialWidth = parseDimension(params.width);
   const initialHeight = parseDimension(params.height);
   const flow = useScanFlow(initialUri);
-  const showToast = useToastStore((state) => state.showToast);
   const originalUriRef = useRef(initialUri ?? null);
   const originalDimensionsRef = useRef(
     initialWidth && initialHeight
@@ -186,8 +182,13 @@ export default function ScanReviewScreen() {
 
       flow.completeUpload(uploadResult);
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      showToast(SUCCESS_MESSAGE);
-      router.replace('/(app)');
+      router.push({
+        pathname: '/scan-confirm',
+        params: {
+          signedUrl: uploadResult.signedUrl,
+          storagePath: uploadResult.storagePath,
+        },
+      });
     } catch (error: unknown) {
       if (uploadRunId !== uploadRunRef.current) {
         return;

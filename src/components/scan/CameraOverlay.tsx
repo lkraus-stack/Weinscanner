@@ -7,7 +7,13 @@ import { typography } from '@/theme/typography';
 const FRAME_WIDTH_RATIO = 0.7;
 const FRAME_ASPECT_RATIO = 4 / 5;
 
-export function CameraOverlay() {
+type CameraOverlayProps = {
+  hint?: string;
+};
+
+export function CameraOverlay({
+  hint = 'Etikett im Rahmen ausrichten',
+}: CameraOverlayProps) {
   const { width } = useWindowDimensions();
   const frameWidth = width * FRAME_WIDTH_RATIO;
   const frameHeight = frameWidth / FRAME_ASPECT_RATIO;
@@ -23,7 +29,7 @@ export function CameraOverlay() {
           },
         ]}
       />
-      <Text style={styles.hint}>Etikett im Rahmen ausrichten</Text>
+      <Text style={styles.hint}>{hint}</Text>
     </View>
   );
 }

@@ -1,0 +1,69 @@
+import { supabase } from '@/lib/supabase';
+import type { WineExtraction } from '@/types/wine-extraction';
+
+type ExtractWineErrorResponse = { error: string };
+
+type ExtractWineResponse = WineExtraction | ExtractWineErrorResponse;
+
+function isErrorResponse(data: ExtractWineResponse): data is ExtractWineErrorResponse {
+  return 'error' in data && typeof data.error === 'string';
+}
+
+async function getFunctionErrorMessage(error: unknown): Promise<string> {
+  if (
+    error &&
+    typeof error === 'object' &&
+    'context' in error &&
+    (error as { context?: unknown }).context instanceof Response
+  ) {
+    try {
+      const errorBody = await (error as { context: Response }).context.json();
+
+      if (
+        errorBody &&
+        typeof errorBody === 'object' &&
+        'error' in errorBody &&
+        typeof (errorBody as { error: unknown }).error === 'string'
+      ) {
+        return (errorBody as { error: string }).error;
+      }
+    } catch {
+      return 'Etikett konnte nicht analysiert werden.';
+    }
+  }
+
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+
+  return 'Etikett konnte nicht analysiert werden.';
+}
+
+export async function extractWineFromLabel(
+  imageUrl: string,
+  ocrText?: string
+): Promise<WineExtraction> {
+  const { data, error } = await supabase.functions.invoke<ExtractWineResponse>(
+    'extract-wine',
+    {
+      body: {
+        imageUrl,
+        ocrText,
+      },
+    }
+  );
+
+  if (error) {
+    throw new Error(await getFunctionErrorMessage(error));
+  }
+
+  if (!data) {
+    throw new Error('Etikett konnte nicht analysiert werden.');
+  }
+
+  if (isErrorResponse(data)) {
+    throw new Error(data.error);
+  }
+
+  return data;
+}

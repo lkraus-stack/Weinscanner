@@ -1,0 +1,188 @@
+export type WineColor = 'weiss' | 'rot' | 'rose' | 'schaum' | 'suess';
+
+export type TasteDryness = 'trocken' | 'halbtrocken' | 'lieblich' | 'suess';
+
+export type WineExtraction = {
+  producer: string;
+  wine_name: string;
+  vintage_year: number | null;
+  region: string | null;
+  country: string | null;
+  appellation: string | null;
+  grape_variety: string | null;
+  wine_color: WineColor | null;
+  taste_dryness: TasteDryness | null;
+  alcohol_percent: number | null;
+  drinking_window_start: number | null;
+  drinking_window_end: number | null;
+  price_min_eur: number | null;
+  price_max_eur: number | null;
+  aromas: string[];
+  description_short: string | null;
+  description_long: string | null;
+  food_pairing: string | null;
+  serving_temperature: string | null;
+  vinification: string | null;
+  data_sources: string[];
+  confidence: {
+    producer: number;
+    wine_name: number;
+    vintage_year: number;
+    overall: number;
+  };
+  notes: string;
+};
+
+export type ExtractWineRequest = {
+  imageUrl: string;
+  ocrText?: string;
+};
+
+const WINE_COLORS = new Set<WineColor>([
+  'weiss',
+  'rot',
+  'rose',
+  'schaum',
+  'suess',
+]);
+
+const TASTE_DRYNESS = new Set<TasteDryness>([
+  'trocken',
+  'halbtrocken',
+  'lieblich',
+  'suess',
+]);
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function stringOrNull(value: unknown): string | null {
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
+function requiredString(value: unknown, fallback: string): string {
+  return typeof value === 'string' && value.trim() ? value.trim() : fallback;
+}
+
+function numberOrNull(value: unknown): number | null {
+  if (value === null || value === undefined || value === '') {
+    return null;
+  }
+
+  const numberValue = typeof value === 'number' ? value : Number(value);
+
+  return Number.isFinite(numberValue) ? numberValue : null;
+}
+
+function stringList(value: unknown, maxItems = 8): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .filter((item): item is string => typeof item === 'string')
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .slice(0, maxItems);
+}
+
+function confidence(value: unknown): number {
+  const numberValue = numberOrNull(value);
+
+  if (numberValue === null) {
+    return 0;
+  }
+
+  return Math.max(0, Math.min(1, numberValue));
+}
+
+function integerYearOrNull(value: unknown): number | null {
+  const numberValue = numberOrNull(value);
+
+  if (numberValue === null) {
+    return null;
+  }
+
+  const roundedValue = Math.round(numberValue);
+
+  return roundedValue >= 1800 && roundedValue <= 2100 ? roundedValue : null;
+}
+
+function wineColorOrNull(value: unknown): WineColor | null {
+  return typeof value === 'string' && WINE_COLORS.has(value as WineColor)
+    ? (value as WineColor)
+    : null;
+}
+
+function tasteDrynessOrNull(value: unknown): TasteDryness | null {
+  return typeof value === 'string' && TASTE_DRYNESS.has(value as TasteDryness)
+    ? (value as TasteDryness)
+    : null;
+}
+
+export function validateExtractWineRequest(value: unknown): ExtractWineRequest {
+  if (!isRecord(value) || typeof value.imageUrl !== 'string') {
+    throw new Error('Ungültiger Request: imageUrl fehlt.');
+  }
+
+  let parsedUrl: URL;
+
+  try {
+    parsedUrl = new URL(value.imageUrl);
+  } catch {
+    throw new Error('Ungültiger Request: imageUrl ist keine URL.');
+  }
+
+  if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
+    throw new Error('Ungültiger Request: imageUrl muss eine HTTP-URL sein.');
+  }
+
+  return {
+    imageUrl: value.imageUrl,
+    ocrText: typeof value.ocrText === 'string' ? value.ocrText : undefined,
+  };
+}
+
+export function validateWineExtraction(value: unknown): WineExtraction {
+  if (!isRecord(value)) {
+    throw new Error('Vantero-Antwort ist kein Objekt.');
+  }
+
+  const rawConfidence = isRecord(value.confidence) ? value.confidence : {};
+
+  return {
+    producer: requiredString(value.producer, ''),
+    wine_name: requiredString(value.wine_name, ''),
+    vintage_year: integerYearOrNull(value.vintage_year),
+    region: stringOrNull(value.region),
+    country: stringOrNull(value.country),
+    appellation: stringOrNull(value.appellation),
+    grape_variety: stringOrNull(value.grape_variety),
+    wine_color: wineColorOrNull(value.wine_color),
+    taste_dryness: tasteDrynessOrNull(value.taste_dryness),
+    alcohol_percent: numberOrNull(value.alcohol_percent),
+    drinking_window_start: integerYearOrNull(value.drinking_window_start),
+    drinking_window_end: integerYearOrNull(value.drinking_window_end),
+    price_min_eur: numberOrNull(value.price_min_eur),
+    price_max_eur: numberOrNull(value.price_max_eur),
+    aromas: stringList(value.aromas),
+    description_short: stringOrNull(value.description_short),
+    description_long: stringOrNull(value.description_long),
+    food_pairing: stringOrNull(value.food_pairing),
+    serving_temperature: stringOrNull(value.serving_temperature),
+    vinification: stringOrNull(value.vinification),
+    data_sources: stringList(value.data_sources, 12),
+    confidence: {
+      producer: confidence(rawConfidence.producer),
+      wine_name: confidence(rawConfidence.wine_name),
+      vintage_year: confidence(rawConfidence.vintage_year),
+      overall: confidence(rawConfidence.overall),
+    },
+    notes: requiredString(value.notes, ''),
+  };
+}

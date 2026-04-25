@@ -34,3 +34,7 @@ EXPO_PUBLIC_SUPABASE_ANON_KEY=dein-anon-key
 npx tsc --noEmit
 npx expo lint
 ```
+
+## Tested manually
+
+- Sprint 06: KI-Analyse, Confirmation-Screen und Jahrgangs-Fallback in Expo Go getestet.

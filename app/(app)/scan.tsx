@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions, type FlashMode } from 'expo-camera';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useRef, useState } from 'react';
 import { Alert, Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -22,6 +22,7 @@ const FLASH_MODES: FlashMode[] = ['auto', 'on', 'off'];
 
 export default function ScanScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ scanTarget?: string }>();
   const insets = useSafeAreaInsets();
   const cameraRef = useRef<CameraView>(null);
   const [permission, requestPermission] = useCameraPermissions();
@@ -29,6 +30,7 @@ export default function ScanScreen() {
   const [isCameraReady, setIsCameraReady] = useState(false);
   const [isCapturing, setIsCapturing] = useState(false);
   const [isPickingImage, setIsPickingImage] = useState(false);
+  const isBackLabelScan = params.scanTarget === 'back-label';
 
   function goToReview(uri: string, width?: number, height?: number) {
     router.push({
@@ -142,7 +144,13 @@ export default function ScanScreen() {
         style={StyleSheet.absoluteFill}
       />
 
-      <CameraOverlay />
+      <CameraOverlay
+        hint={
+          isBackLabelScan
+            ? 'Rücketikett oder Kapsel im Rahmen ausrichten'
+            : 'Etikett im Rahmen ausrichten'
+        }
+      />
 
       <CameraHeader
         flashMode={flashMode}

@@ -8,6 +8,7 @@
     "ios": "expo start --ios",
     "lint": "expo lint",
     "dev:create-user": "tsx scripts/create-dev-user.ts",
+    "test:extract-wine": "tsx scripts/test-extract-wine.ts",
     "test:storage": "tsx scripts/test-storage.ts",
     "web": "expo start --web"
   },
