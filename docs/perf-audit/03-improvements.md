@@ -20,3 +20,20 @@
 
 - Harte iPhone-Lab-Werte bleiben fuer Sprint 15 bewusst ausser Scope.
 - `estimatedItemSize` wird nicht weiter verfolgt, solange `@shopify/flash-list` 2.x eingesetzt wird.
+
+## Block B, P2 Query-Optimierungen
+
+| Aenderung | Status | Vorher | Nachher | Test |
+| --- | --- | --- | --- | --- |
+| Profil-Cache | umgesetzt | `useProfile` wurde nach 60 Sekunden stale | `useProfile` bleibt 5 Minuten frisch, Mutations-Invalidierung bleibt massgeblich | `npx tsc --noEmit` gruen, `npx expo lint` gruen |
+| Bestandsstatistik-Cache | umgesetzt | `useInventoryStats` wurde nach 30 Sekunden stale | `useInventoryStats` bleibt 60 Sekunden frisch, Mutations-Invalidierung bleibt massgeblich | `npx tsc --noEmit` gruen, `npx expo lint` gruen |
+| Signed-URL-Batching | umgesetzt | History, Ratings und Inventory hielten eigene Batching-Logik | Gemeinsamer `batchSignedUrls` Helper in `src/lib/storage.ts` | `npx tsc --noEmit` gruen, `npx expo lint` gruen |
+| Inventory-Foto-Roundtrip | umgesetzt | `useInventory` lud Bestand und danach Scans separat pro Page | RPC `get_user_inventory_with_photos` liefert Bestand plus neuestes Scan-Foto in einem Query | Migration gepusht, Types generiert, `npx tsc --noEmit` gruen, `npx expo lint` gruen |
+
+## Block B subjektiver Vergleich
+
+| Szenario | Vorher | Nachher | Notiz |
+| --- | --- | --- | --- |
+| Profil-Tab erneut oeffnen | Refetch nach 60 Sekunden moeglich | Refetch erst nach 5 Minuten, ausser nach Mutation | Manueller iPhone-Test noch offen |
+| Bestand-Tab mit Bildern | Ein extra Scans-Query pro Page | Ein RPC-Query plus ein Signed-URL-Batch | Manueller iPhone-Test noch offen |
+| Listenbilder | Batching mehrfach implementiert | Ein gemeinsamer Helper, gleiches Verhalten fuer Remote-URLs und Storage-Pfade | Network-Inspector-Verifikation noch offen |
