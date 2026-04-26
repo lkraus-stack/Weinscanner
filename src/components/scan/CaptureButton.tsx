@@ -1,6 +1,7 @@
+import { useMemo } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 
-import { colors } from '@/theme/colors';
+import { useTheme, type ThemeColors } from '@/theme/ThemeProvider';
 import { radii } from '@/theme/spacing';
 
 type CaptureButtonProps = {
@@ -14,6 +15,8 @@ export function CaptureButton({
   isLoading,
   onPress,
 }: CaptureButtonProps) {
+  const { colors, styles } = useCaptureButtonStyles();
+
   return (
     <Pressable
       accessibilityLabel="Foto aufnehmen"
@@ -28,7 +31,15 @@ export function CaptureButton({
   );
 }
 
-const styles = StyleSheet.create({
+function useCaptureButtonStyles() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
+
+  return { colors, styles };
+}
+
+function makeStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   outer: {
     alignItems: 'center',
     backgroundColor: colors.white,
@@ -49,4 +60,5 @@ const styles = StyleSheet.create({
   disabled: {
     opacity: 0.5,
   },
-});
+  });
+}

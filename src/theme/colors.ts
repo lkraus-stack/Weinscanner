@@ -56,12 +56,3 @@ export const themeColors = {
   dark: darkColors,
   light: lightColors,
 } as const;
-
-// Temporary bridge for the staged dark-mode migration.
-// Existing components can keep using colors.background until their wave moves
-// to useTheme(). Welle 5 removes the light alias.
-export const colors = {
-  ...lightColors,
-  dark: darkColors,
-  light: lightColors,
-} as const;

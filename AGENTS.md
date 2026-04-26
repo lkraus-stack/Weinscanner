@@ -20,6 +20,8 @@ Aktualisiere sie wenn neue Konventionen sich etablieren.
 1. KI-Calls IMMER über Edge Functions, NIE direkt aus Mobile.
    Vantero-API-Key bleibt in Supabase Secrets, nie im Bundle.
 2. Keine Inline-Hex-Farben. Alle Farben aus src/theme/colors.ts.
+   Komponenten greifen nur über useTheme() auf Farben zu,
+   niemals direkt colors importieren.
 3. Deutsche UI-Texte. Keine Em-Dashes (— oder –) in User-Strings.
    Stattdessen Komma, Punkt oder Klammern.
 4. Pflicht-Jahrgangs-Picker NIEMALS pre-filled mit KI-Wert.
@@ -38,6 +40,7 @@ Aktualisiere sie wenn neue Konventionen sich etablieren.
 ## Verbotene Patterns
 - AsyncStorage für sensitive Daten → SecureStore.
 - Direkte Hex-Farben anywhere außer src/theme/colors.ts.
+- Direkter colors-Import in Komponenten. Immer useTheme() nutzen.
 - Em-Dashes in User-Texten.
 - console.log in Production-Code (in Tests/Scripts okay).
 - new OpenAI() oder new Anthropic() ohne baseURL-Override.

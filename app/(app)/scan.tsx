@@ -3,7 +3,7 @@ import { CameraView, useCameraPermissions, type FlashMode } from 'expo-camera';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Alert, Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -15,12 +15,13 @@ import {
   openAppSettings,
   requestMediaLibraryPermission,
 } from '@/lib/permissions';
-import { colors } from '@/theme/colors';
+import { useTheme, type ThemeColors } from '@/theme/ThemeProvider';
 import { radii, spacing } from '@/theme/spacing';
 
 const FLASH_MODES: FlashMode[] = ['auto', 'on', 'off'];
 
 export default function ScanScreen() {
+  const { colors, styles } = useScanStyles();
   const router = useRouter();
   const params = useLocalSearchParams<{ scanTarget?: string }>();
   const insets = useSafeAreaInsets();
@@ -191,7 +192,15 @@ export default function ScanScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function useScanStyles() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
+
+  return { colors, styles };
+}
+
+function makeStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   screen: {
     backgroundColor: colors.text,
     flex: 1,
@@ -218,4 +227,5 @@ const styles = StyleSheet.create({
   sideButtonDisabled: {
     opacity: 0.35,
   },
-});
+  });
+}

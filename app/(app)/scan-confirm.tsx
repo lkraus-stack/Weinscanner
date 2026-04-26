@@ -28,7 +28,7 @@ import {
 import { WineDetailRow } from '@/components/scan/WineDetailRow';
 import { saveScan, scanWineFromLabel } from '@/lib/ai-client';
 import { useToastStore } from '@/stores/toast-store';
-import { colors } from '@/theme/colors';
+import { useTheme, type ThemeColors } from '@/theme/ThemeProvider';
 import { radii, spacing } from '@/theme/spacing';
 import { typography } from '@/theme/typography';
 import type {
@@ -539,6 +539,7 @@ function buildSavePayload({
 }
 
 export default function ScanConfirmScreen() {
+  const { colors, styles } = useScanConfirmStyles();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const showToast = useToastStore((state) => state.showToast);
@@ -980,6 +981,8 @@ function Section({
   children: React.ReactNode;
   title: string;
 }) {
+  const { styles } = useScanConfirmStyles();
+
   return (
     <View style={styles.section}>
       <Text style={styles.sectionTitle}>{title}</Text>
@@ -989,6 +992,7 @@ function Section({
 }
 
 function SourceHint({ result }: { result: ScanWineResult }) {
+  const { colors, styles } = useScanConfirmStyles();
   const hint = getSourceHint(result);
 
   return (
@@ -1003,6 +1007,8 @@ function SourceHint({ result }: { result: ScanWineResult }) {
 }
 
 function TextBlock({ label, text }: { label: string; text: string }) {
+  const { styles } = useScanConfirmStyles();
+
   return (
     <View style={styles.textBlock}>
       <Text style={styles.textBlockLabel}>{label}</Text>
@@ -1011,7 +1017,15 @@ function TextBlock({ label, text }: { label: string; text: string }) {
   );
 }
 
-const styles = StyleSheet.create({
+function useScanConfirmStyles() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
+
+  return { colors, styles };
+}
+
+function makeStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   actions: {
     flexDirection: 'row',
     gap: spacing.md,
@@ -1269,4 +1283,5 @@ const styles = StyleSheet.create({
     fontSize: typography.size.lg,
     fontWeight: typography.weight.black,
   },
-});
+  });
+}

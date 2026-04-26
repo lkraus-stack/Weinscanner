@@ -1,6 +1,7 @@
+import { useMemo } from 'react';
 import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 
-import { colors } from '@/theme/colors';
+import { useTheme, type ThemeColors } from '@/theme/ThemeProvider';
 import { radii, spacing } from '@/theme/spacing';
 import { typography } from '@/theme/typography';
 
@@ -14,6 +15,7 @@ type CameraOverlayProps = {
 export function CameraOverlay({
   hint = 'Etikett im Rahmen ausrichten',
 }: CameraOverlayProps) {
+  const { styles } = useCameraOverlayStyles();
   const { width } = useWindowDimensions();
   const frameWidth = width * FRAME_WIDTH_RATIO;
   const frameHeight = frameWidth / FRAME_ASPECT_RATIO;
@@ -34,7 +36,15 @@ export function CameraOverlay({
   );
 }
 
-const styles = StyleSheet.create({
+function useCameraOverlayStyles() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
+
+  return { styles };
+}
+
+function makeStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -57,4 +67,5 @@ const styles = StyleSheet.create({
     opacity: 0.86,
     textAlign: 'center',
   },
-});
+  });
+}

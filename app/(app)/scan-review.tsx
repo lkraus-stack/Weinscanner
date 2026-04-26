@@ -2,7 +2,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { Image } from 'expo-image';
 import * as Haptics from 'expo-haptics';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -19,7 +19,7 @@ import { UploadOverlay } from '@/components/scan/UploadOverlay';
 import { useScanFlow } from '@/hooks/useScanFlow';
 import { cropImage, getImageDimensions, type CropRect } from '@/lib/image';
 import { uploadWineLabel } from '@/lib/storage';
-import { colors } from '@/theme/colors';
+import { useTheme, type ThemeColors } from '@/theme/ThemeProvider';
 import { radii, spacing } from '@/theme/spacing';
 import { typography } from '@/theme/typography';
 
@@ -73,6 +73,7 @@ function getErrorMessage(error: unknown) {
 }
 
 export default function ScanReviewScreen() {
+  const { colors, styles } = useScanReviewStyles();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{
@@ -304,6 +305,8 @@ type CropOptionProps = {
 };
 
 function CropOption({ label, onPress, selected }: CropOptionProps) {
+  const { colors, styles } = useScanReviewStyles();
+
   return (
     <Pressable
       onPress={onPress}
@@ -324,7 +327,15 @@ function CropOption({ label, onPress, selected }: CropOptionProps) {
   );
 }
 
-const styles = StyleSheet.create({
+function useScanReviewStyles() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
+
+  return { colors, styles };
+}
+
+function makeStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   cropLoading: {
     alignItems: 'center',
     flexDirection: 'row',
@@ -462,4 +473,5 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     flex: 1,
   },
-});
+  });
+}

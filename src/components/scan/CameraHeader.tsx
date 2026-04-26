@@ -1,7 +1,8 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { colors } from '@/theme/colors';
+import { useTheme, type ThemeColors } from '@/theme/ThemeProvider';
 import { radii, spacing } from '@/theme/spacing';
 import { typography } from '@/theme/typography';
 
@@ -24,6 +25,8 @@ export function CameraHeader({
   onToggleFlash,
   topInset,
 }: CameraHeaderProps) {
+  const { colors, styles } = useCameraHeaderStyles();
+
   return (
     <View style={[styles.container, { paddingTop: topInset + spacing.md }]}>
       <Pressable
@@ -46,7 +49,15 @@ export function CameraHeader({
   );
 }
 
-const styles = StyleSheet.create({
+function useCameraHeaderStyles() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
+
+  return { colors, styles };
+}
+
+function makeStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
     alignItems: 'center',
     flexDirection: 'row',
@@ -85,4 +96,5 @@ const styles = StyleSheet.create({
     fontSize: typography.size.sm,
     fontWeight: typography.weight.bold,
   },
-});
+  });
+}

@@ -1,7 +1,8 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { colors } from '@/theme/colors';
+import { useTheme, type ThemeColors } from '@/theme/ThemeProvider';
 import { radii, spacing } from '@/theme/spacing';
 import { typography } from '@/theme/typography';
 
@@ -16,6 +17,8 @@ export function PermissionDeniedView({
   onOpenSettings,
   onRequestPermission,
 }: PermissionDeniedViewProps) {
+  const { colors, styles } = usePermissionDeniedStyles();
+
   return (
     <View style={styles.screen}>
       <View style={styles.iconShell}>
@@ -50,7 +53,15 @@ export function PermissionDeniedView({
   );
 }
 
-const styles = StyleSheet.create({
+function usePermissionDeniedStyles() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
+
+  return { colors, styles };
+}
+
+function makeStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   screen: {
     alignItems: 'center',
     backgroundColor: colors.background,
@@ -108,4 +119,5 @@ const styles = StyleSheet.create({
     fontSize: typography.size.base,
     fontWeight: typography.weight.extraBold,
   },
-});
+  });
+}

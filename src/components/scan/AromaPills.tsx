@@ -1,6 +1,7 @@
+import { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
-import { colors } from '@/theme/colors';
+import { useTheme, type ThemeColors } from '@/theme/ThemeProvider';
 import { radii, spacing } from '@/theme/spacing';
 import { typography } from '@/theme/typography';
 
@@ -9,6 +10,8 @@ type Props = {
 };
 
 export function AromaPills({ aromas }: Props) {
+  const { styles } = useAromaPillsStyles();
+
   if (aromas.length === 0) {
     return null;
   }
@@ -24,7 +27,15 @@ export function AromaPills({ aromas }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+function useAromaPillsStyles() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
+
+  return { styles };
+}
+
+function makeStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   pill: {
     backgroundColor: colors.surfaceWarm,
     borderColor: colors.border,
@@ -43,4 +54,5 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: spacing.sm,
   },
-});
+  });
+}
