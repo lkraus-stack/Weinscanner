@@ -37,3 +37,18 @@
 | Profil-Tab erneut oeffnen | Refetch nach 60 Sekunden moeglich | Refetch erst nach 5 Minuten, ausser nach Mutation | Manueller iPhone-Test noch offen |
 | Bestand-Tab mit Bildern | Ein extra Scans-Query pro Page | Ein RPC-Query plus ein Signed-URL-Batch | Manueller iPhone-Test noch offen |
 | Listenbilder | Batching mehrfach implementiert | Ein gemeinsamer Helper, gleiches Verhalten fuer Remote-URLs und Storage-Pfade | Network-Inspector-Verifikation noch offen |
+
+## Block C, Bundle-Audit
+
+| Aenderung | Status | Vorher | Nachher | Test |
+| --- | --- | --- | --- | --- |
+| Bundle-Audit | umgesetzt | Keine Export-Baseline fuer iOS-Hermes-Bundle | `02-bundle.md` dokumentiert Bundle, Assetmap und Top-Assets | `npx expo export --platform ios --dump-assetmap` erfolgreich |
+| Icon-Import Quick-Win | umgesetzt | Barrel-Import aus `@expo/vector-icons` zog alle Icon-Fonts in den Export | Direkter `@expo/vector-icons/Ionicons` Import zieht nur Ionicons | Export erneut erfolgreich, Asset-Summe von 3.91 MB auf 0.40 MB reduziert |
+
+## Block C subjektiver Vergleich
+
+| Szenario | Vorher | Nachher | Notiz |
+| --- | --- | --- | --- |
+| iOS Hermes Bundle | 5.30 MB | 4.98 MB | Quick-Win durch direkte Ionicons-Imports |
+| Exportierte Assets | 3.91 MB | 0.40 MB | Nicht genutzte Icon-Fonts entfernt |
+| Metro-Module | 1678 | 1624 | Export-Messung, kein Runtime-iPhone-Wert |
