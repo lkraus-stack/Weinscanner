@@ -16,13 +16,26 @@ const COLOR_LABELS: Record<WineColor, string> = {
   weiss: 'Weiß',
 };
 
-const COLOR_SWATCHES: Record<WineColor, string> = {
-  rose: colors.wineRose,
-  rot: colors.wineRed,
-  schaum: colors.wineSparkling,
-  suess: colors.warning,
-  weiss: colors.wineWhite,
-};
+const COLOR_SWATCH_STYLES = StyleSheet.create({
+  rose: {
+    backgroundColor: colors.wineRose,
+  },
+  rot: {
+    backgroundColor: colors.wineRed,
+  },
+  schaum: {
+    backgroundColor: colors.wineSparkling,
+  },
+  suess: {
+    backgroundColor: colors.warning,
+  },
+  unknown: {
+    backgroundColor: colors.border,
+  },
+  weiss: {
+    backgroundColor: colors.wineWhite,
+  },
+});
 
 type Props = {
   item: HistoryItemRecord;
@@ -41,9 +54,9 @@ export const HistoryItem = memo(function HistoryItem({
 }: Props) {
   const regionLine = joinMeta([item.region, item.country]);
   const colorLabel = item.wineColor ? COLOR_LABELS[item.wineColor] : 'Unklar';
-  const swatchColor = item.wineColor
-    ? COLOR_SWATCHES[item.wineColor]
-    : colors.border;
+  const swatchStyle = item.wineColor
+    ? COLOR_SWATCH_STYLES[item.wineColor]
+    : COLOR_SWATCH_STYLES.unknown;
   const hasRating = typeof item.ratingStars === 'number';
 
   return (
@@ -107,7 +120,7 @@ export const HistoryItem = memo(function HistoryItem({
             <View
               style={[
                 styles.swatch,
-                { backgroundColor: swatchColor },
+                swatchStyle,
               ]}
             />
             <Text style={styles.colorLabel}>{colorLabel}</Text>
