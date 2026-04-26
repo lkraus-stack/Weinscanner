@@ -70,6 +70,6 @@ export function useInventoryStats() {
       return mapInventoryStats((data ?? []) as InventoryStatsRow[]);
     },
     queryKey: ['inventory-stats'],
-    staleTime: 30_000,
+    staleTime: 60_000,
   });
 }
