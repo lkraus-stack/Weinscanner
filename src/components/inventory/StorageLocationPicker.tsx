@@ -1,6 +1,7 @@
+import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
-import { colors } from '@/theme/colors';
+import { useTheme, type ThemeColors } from '@/theme/ThemeProvider';
 import { radii, spacing } from '@/theme/spacing';
 import { typography } from '@/theme/typography';
 
@@ -24,6 +25,8 @@ export function StorageLocationPicker({
   onChange,
   value,
 }: Props) {
+  const { colors, resolved, styles } = useStorageLocationPickerStyles();
+
   return (
     <View style={styles.container}>
       <TextInput
@@ -32,6 +35,7 @@ export function StorageLocationPicker({
         placeholder="Standort eingeben"
         placeholderTextColor={colors.placeholder}
         style={styles.input}
+        keyboardAppearance={resolved}
         value={value}
       />
 
@@ -56,7 +60,15 @@ export function StorageLocationPicker({
   );
 }
 
-const styles = StyleSheet.create({
+function useStorageLocationPickerStyles() {
+  const { colors, resolved } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
+
+  return { colors, resolved, styles };
+}
+
+function makeStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
     gap: spacing.md,
   },
@@ -94,4 +106,5 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: spacing.sm,
   },
-});
+  });
+}

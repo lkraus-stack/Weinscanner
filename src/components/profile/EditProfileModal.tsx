@@ -2,7 +2,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Haptics from 'expo-haptics';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -22,7 +22,7 @@ import {
   openAppSettings,
   requestMediaLibraryPermission,
 } from '@/lib/permissions';
-import { colors } from '@/theme/colors';
+import { useTheme, type ThemeColors } from '@/theme/ThemeProvider';
 import { radii, spacing } from '@/theme/spacing';
 import { typography } from '@/theme/typography';
 
@@ -52,6 +52,7 @@ export function EditProfileModal({
   onSubmit,
   visible,
 }: Props) {
+  const { colors, resolved, styles } = useEditProfileModalStyles();
   const insets = useSafeAreaInsets();
   const [name, setName] = useState(displayName);
   const [avatarLocalUri, setAvatarLocalUri] = useState<string | null>(null);
@@ -190,6 +191,7 @@ export function EditProfileModal({
               placeholder="Dein Name"
               placeholderTextColor={colors.placeholder}
               style={styles.input}
+              keyboardAppearance={resolved}
               value={name}
             />
           </View>
@@ -199,7 +201,15 @@ export function EditProfileModal({
   );
 }
 
-const styles = StyleSheet.create({
+function useEditProfileModalStyles() {
+  const { colors, resolved } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
+
+  return { colors, resolved, styles };
+}
+
+function makeStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   avatarBlock: {
     alignItems: 'center',
     gap: spacing.md,
@@ -313,4 +323,5 @@ const styles = StyleSheet.create({
   section: {
     gap: spacing.sm,
   },
-});
+  });
+}

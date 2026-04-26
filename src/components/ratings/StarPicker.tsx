@@ -1,14 +1,19 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Haptics from 'expo-haptics';
-import { useRef } from 'react';
 import {
-  Animated,
   Pressable,
   StyleSheet,
   View,
 } from 'react-native';
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withSequence,
+  withSpring,
+  withTiming,
+} from 'react-native-reanimated';
 
-import { colors } from '@/theme/colors';
+import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/spacing';
 
 type Props = {
@@ -28,7 +33,11 @@ function StarButton({
   onPress: (value: number) => void;
   value: number;
 }) {
-  const scale = useRef(new Animated.Value(1)).current;
+  const { colors } = useTheme();
+  const scale = useSharedValue(1);
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
 
   async function handlePress() {
     if (disabled) {
@@ -36,19 +45,10 @@ function StarButton({
     }
 
     await Haptics.selectionAsync();
-    Animated.sequence([
-      Animated.timing(scale, {
-        duration: 90,
-        toValue: 1.22,
-        useNativeDriver: true,
-      }),
-      Animated.spring(scale, {
-        friction: 4,
-        tension: 180,
-        toValue: 1,
-        useNativeDriver: true,
-      }),
-    ]).start();
+    scale.value = withSequence(
+      withTiming(1.22, { duration: 90 }),
+      withSpring(1, { damping: 10, stiffness: 220 })
+    );
     onPress(value);
   }
 
@@ -60,7 +60,7 @@ function StarButton({
       onPress={handlePress}
       style={styles.starButton}
     >
-      <Animated.View style={{ transform: [{ scale }] }}>
+      <Animated.View style={animatedStyle}>
         <Ionicons
           name={filled ? 'star' : 'star-outline'}
           size={42}

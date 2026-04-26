@@ -1,5 +1,5 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Modal,
   Pressable,
@@ -10,7 +10,7 @@ import {
   View,
 } from 'react-native';
 
-import { colors } from '@/theme/colors';
+import { useTheme, type ThemeColors } from '@/theme/ThemeProvider';
 import { radii, spacing } from '@/theme/spacing';
 import { typography } from '@/theme/typography';
 import type { TasteDryness, WineColor } from '@/types/wine-extraction';
@@ -70,6 +70,7 @@ function parseAlcohol(value: string) {
 }
 
 export function EditWineModal({ onClose, onSave, value, visible }: Props) {
+  const { colors, resolved, styles } = useEditWineModalStyles();
   const [form, setForm] = useState<WineEditData>(value);
   const [alcoholText, setAlcoholText] = useState('');
 
@@ -179,6 +180,7 @@ export function EditWineModal({ onClose, onSave, value, visible }: Props) {
               placeholder="z.B. 13.5"
               placeholderTextColor={colors.placeholder}
               style={styles.input}
+              keyboardAppearance={resolved}
               value={alcoholText}
             />
           </View>
@@ -197,6 +199,8 @@ function Field({
   onChangeText: (value: string) => void;
   value: string;
 }) {
+  const { colors, resolved, styles } = useEditWineModalStyles();
+
   return (
     <View style={styles.fieldGroup}>
       <Text style={styles.label}>{label}</Text>
@@ -206,6 +210,7 @@ function Field({
         placeholder={label}
         placeholderTextColor={colors.placeholder}
         style={styles.input}
+        keyboardAppearance={resolved}
         value={value}
       />
     </View>
@@ -223,6 +228,8 @@ function ChoiceGroup<T extends string>({
   options: { label: string; value: T }[];
   value: T | null;
 }) {
+  const { styles } = useEditWineModalStyles();
+
   return (
     <View style={styles.fieldGroup}>
       <Text style={styles.label}>{label}</Text>
@@ -252,7 +259,15 @@ function ChoiceGroup<T extends string>({
   );
 }
 
-const styles = StyleSheet.create({
+function useEditWineModalStyles() {
+  const { colors, resolved } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
+
+  return { colors, resolved, styles };
+}
+
+function makeStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   choice: {
     backgroundColor: colors.surfaceWarm,
     borderColor: colors.border,
@@ -330,4 +345,5 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
     flex: 1,
   },
-});
+  });
+}

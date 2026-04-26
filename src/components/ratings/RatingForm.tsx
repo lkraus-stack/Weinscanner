@@ -2,7 +2,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import DateTimePicker, {
   type DateTimePickerEvent,
 } from '@react-native-community/datetimepicker';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   Platform,
   Pressable,
@@ -12,7 +12,7 @@ import {
   View,
 } from 'react-native';
 
-import { colors } from '@/theme/colors';
+import { useTheme, type ThemeColors } from '@/theme/ThemeProvider';
 import { radii, spacing } from '@/theme/spacing';
 import { typography } from '@/theme/typography';
 
@@ -74,6 +74,7 @@ export function getTodayRatingDate() {
 }
 
 export function RatingForm({ disabled = false, onChange, value }: Props) {
+  const { colors, resolved, styles } = useRatingFormStyles();
   const [notesHeight, setNotesHeight] = useState(NOTES_MIN_HEIGHT);
 
   function updateField<K extends keyof RatingFormValue>(
@@ -128,6 +129,7 @@ export function RatingForm({ disabled = false, onChange, value }: Props) {
           placeholderTextColor={colors.placeholder}
           scrollEnabled={notesHeight >= NOTES_MAX_HEIGHT}
           style={[styles.input, styles.notesInput, { height: notesHeight }]}
+          keyboardAppearance={resolved}
           textAlignVertical="top"
           value={value.notes}
         />
@@ -148,6 +150,7 @@ export function RatingForm({ disabled = false, onChange, value }: Props) {
           placeholder="Restaurant XYZ, Geburtstag"
           placeholderTextColor={colors.placeholder}
           style={styles.input}
+          keyboardAppearance={resolved}
           value={value.occasion}
         />
 
@@ -180,6 +183,7 @@ function DateInput({
   onChange: (value: string) => void;
   value: string;
 }) {
+  const { colors, resolved, styles } = useRatingFormStyles();
   const [isPickerVisible, setIsPickerVisible] = useState(false);
 
   function handleDateChange(event: DateTimePickerEvent, selectedDate?: Date) {
@@ -218,6 +222,7 @@ function DateInput({
           display={Platform.OS === 'ios' ? 'inline' : 'default'}
           mode="date"
           onChange={handleDateChange}
+          themeVariant={resolved}
           value={dateFromInputValue(value)}
         />
       ) : null}
@@ -232,6 +237,8 @@ function FormSection({
   children: React.ReactNode;
   title: string;
 }) {
+  const { styles } = useRatingFormStyles();
+
   return (
     <View style={styles.section}>
       <View style={styles.sectionHeader}>
@@ -243,7 +250,15 @@ function FormSection({
   );
 }
 
-const styles = StyleSheet.create({
+function useRatingFormStyles() {
+  const { colors, resolved } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
+
+  return { colors, resolved, styles };
+}
+
+function makeStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   dateButton: {
     alignItems: 'center',
     backgroundColor: colors.surface,
@@ -321,4 +336,5 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: spacing.sm,
   },
-});
+  });
+}

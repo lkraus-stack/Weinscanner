@@ -1,8 +1,9 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Haptics from 'expo-haptics';
+import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { colors } from '@/theme/colors';
+import { useTheme, type ThemeColors } from '@/theme/ThemeProvider';
 import { radii, spacing } from '@/theme/spacing';
 import { typography } from '@/theme/typography';
 
@@ -25,6 +26,8 @@ export function QuantityPicker({
   onChange,
   value,
 }: Props) {
+  const { colors, styles } = useQuantityPickerStyles();
+
   async function step(delta: number) {
     if (disabled) {
       return;
@@ -77,7 +80,15 @@ export function QuantityPicker({
   );
 }
 
-const styles = StyleSheet.create({
+function useQuantityPickerStyles() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
+
+  return { colors, styles };
+}
+
+function makeStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
     alignItems: 'center',
     flexDirection: 'row',
@@ -120,4 +131,5 @@ const styles = StyleSheet.create({
     fontWeight: typography.weight.black,
     letterSpacing: 0,
   },
-});
+  });
+}

@@ -1,6 +1,7 @@
+import { useMemo } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { colors } from '@/theme/colors';
+import { useTheme, type ThemeColors } from '@/theme/ThemeProvider';
 import { radii, spacing } from '@/theme/spacing';
 import { typography } from '@/theme/typography';
 
@@ -15,6 +16,8 @@ export function UploadOverlay({
   text = 'Foto wird hochgeladen...',
   visible,
 }: UploadOverlayProps) {
+  const { colors, styles } = useUploadOverlayStyles();
+
   if (!visible) {
     return null;
   }
@@ -33,11 +36,18 @@ export function UploadOverlay({
   );
 }
 
-const styles = StyleSheet.create({
+function useUploadOverlayStyles() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
+
+  return { colors, styles };
+}
+
+function makeStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   backdrop: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: colors.text,
-    opacity: 0.68,
+    backgroundColor: colors.overlay,
   },
   cancelButton: {
     alignItems: 'center',
@@ -79,4 +89,5 @@ const styles = StyleSheet.create({
     lineHeight: typography.lineHeight.base,
     textAlign: 'center',
   },
-});
+  });
+}

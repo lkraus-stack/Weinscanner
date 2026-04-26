@@ -1,5 +1,5 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { colors } from '@/theme/colors';
+import { useTheme, type ThemeColors } from '@/theme/ThemeProvider';
 import { radii, spacing } from '@/theme/spacing';
 import { typography } from '@/theme/typography';
 
@@ -36,6 +36,7 @@ export function DeleteAccountModal({
   onConfirm,
   visible,
 }: Props) {
+  const { colors, resolved, styles } = useDeleteAccountModalStyles();
   const insets = useSafeAreaInsets();
   const [confirmEmail, setConfirmEmail] = useState('');
   const canDelete = normalizeEmail(confirmEmail) === normalizeEmail(email);
@@ -87,6 +88,7 @@ export function DeleteAccountModal({
               placeholder={email}
               placeholderTextColor={colors.placeholder}
               style={styles.input}
+              keyboardAppearance={resolved}
               value={confirmEmail}
             />
           </View>
@@ -123,7 +125,15 @@ export function DeleteAccountModal({
   );
 }
 
-const styles = StyleSheet.create({
+function useDeleteAccountModalStyles() {
+  const { colors, resolved } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
+
+  return { colors, resolved, styles };
+}
+
+function makeStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   backdrop: {
     flex: 1,
   },
@@ -223,4 +233,5 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     width: 46,
   },
-});
+  });
+}

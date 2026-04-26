@@ -17,7 +17,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { colors } from '@/theme/colors';
+import { useTheme, type ThemeColors } from '@/theme/ThemeProvider';
 import { radii, spacing } from '@/theme/spacing';
 import { typography } from '@/theme/typography';
 
@@ -123,6 +123,7 @@ export function AddInventoryModal({
   visible,
   wineTitle,
 }: Props) {
+  const { colors, resolved, styles } = useAddInventoryModalStyles();
   const insets = useSafeAreaInsets();
   const [formValue, setFormValue] = useState<InventoryFormValue>(initialValue);
   const [priceText, setPriceText] = useState(
@@ -245,6 +246,7 @@ export function AddInventoryModal({
                 placeholder="18,00"
                 placeholderTextColor={colors.placeholder}
                 style={[styles.input, styles.priceInput]}
+                keyboardAppearance={resolved}
                 value={priceText}
               />
               <Text style={styles.priceSuffix}>€</Text>
@@ -274,6 +276,7 @@ export function AddInventoryModal({
               placeholderTextColor={colors.placeholder}
               scrollEnabled={notesHeight >= NOTES_MAX_HEIGHT}
               style={[styles.input, styles.notesInput, { height: notesHeight }]}
+              keyboardAppearance={resolved}
               textAlignVertical="top"
               value={formValue.notes}
             />
@@ -306,6 +309,7 @@ function DateInput({
   onChange: (value: string | null) => void;
   value: string | null;
 }) {
+  const { colors, resolved, styles } = useAddInventoryModalStyles();
   const [isPickerVisible, setIsPickerVisible] = useState(false);
 
   function handleDateChange(event: DateTimePickerEvent, selectedDate?: Date) {
@@ -351,6 +355,7 @@ function DateInput({
           display={Platform.OS === 'ios' ? 'inline' : 'default'}
           mode="date"
           onChange={handleDateChange}
+          themeVariant={resolved}
           value={dateFromInputValue(value)}
         />
       ) : null}
@@ -365,6 +370,8 @@ function FormSection({
   children: React.ReactNode;
   title: string;
 }) {
+  const { styles } = useAddInventoryModalStyles();
+
   return (
     <View style={styles.section}>
       <View style={styles.sectionHeader}>
@@ -376,7 +383,15 @@ function FormSection({
   );
 }
 
-const styles = StyleSheet.create({
+function useAddInventoryModalStyles() {
+  const { colors, resolved } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
+
+  return { colors, resolved, styles };
+}
+
+function makeStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   clearDateButton: {
     alignSelf: 'flex-start',
     paddingVertical: spacing.xs,
@@ -526,4 +541,5 @@ const styles = StyleSheet.create({
     lineHeight: typography.lineHeight.lg,
     textAlign: 'center',
   },
-});
+  });
+}

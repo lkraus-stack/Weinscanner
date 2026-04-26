@@ -1,6 +1,7 @@
+import { useMemo } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { colors } from '@/theme/colors';
+import { useTheme, type ThemeColors } from '@/theme/ThemeProvider';
 import { radii, spacing } from '@/theme/spacing';
 import { typography } from '@/theme/typography';
 
@@ -19,6 +20,8 @@ export function ReviewActions({
   onRetake,
   onUpload,
 }: ReviewActionsProps) {
+  const { colors, styles } = useReviewActionsStyles();
+
   return (
     <View style={styles.container}>
       <Pressable
@@ -52,7 +55,15 @@ export function ReviewActions({
   );
 }
 
-const styles = StyleSheet.create({
+function useReviewActionsStyles() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
+
+  return { colors, styles };
+}
+
+function makeStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
     alignItems: 'center',
     backgroundColor: colors.surface,
@@ -93,4 +104,5 @@ const styles = StyleSheet.create({
     fontWeight: typography.weight.bold,
     textAlign: 'center',
   },
-});
+  });
+}

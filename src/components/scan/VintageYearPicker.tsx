@@ -10,7 +10,7 @@ import {
   View,
 } from 'react-native';
 
-import { colors } from '@/theme/colors';
+import { useTheme, type ThemeColors } from '@/theme/ThemeProvider';
 import { radii, spacing } from '@/theme/spacing';
 import { typography } from '@/theme/typography';
 
@@ -50,6 +50,7 @@ export function VintageYearPicker({
   suggestedYear,
   value,
 }: Props) {
+  const { colors, resolved, styles } = useVintageYearPickerStyles();
   const [isPickerOpen, setIsPickerOpen] = useState(false);
   const [manualYear, setManualYear] = useState('');
   const [manualError, setManualError] = useState<string | null>(null);
@@ -229,6 +230,7 @@ export function VintageYearPicker({
                 placeholderTextColor={colors.placeholder}
                 returnKeyType="done"
                 style={styles.manualInput}
+                keyboardAppearance={resolved}
                 value={manualYear}
               />
               <Pressable onPress={submitManualYear} style={styles.manualButton}>
@@ -286,6 +288,8 @@ function YearPills({
   selectedYear: number | null;
   years: number[];
 }) {
+  const { styles } = useVintageYearPickerStyles();
+
   if (years.length === 0) {
     return null;
   }
@@ -314,7 +318,15 @@ function YearPills({
   );
 }
 
-const styles = StyleSheet.create({
+function useVintageYearPickerStyles() {
+  const { colors, resolved } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
+
+  return { colors, resolved, styles };
+}
+
+function makeStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   card: {
     backgroundColor: colors.surface,
     borderColor: colors.border,
@@ -541,4 +553,5 @@ const styles = StyleSheet.create({
   yearListTextSelected: {
     color: colors.primaryDark,
   },
-});
+  });
+}

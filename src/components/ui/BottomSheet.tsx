@@ -14,7 +14,7 @@ import {
   View,
 } from 'react-native';
 
-import { colors } from '@/theme/colors';
+import { useTheme, type ThemeColors } from '@/theme/ThemeProvider';
 import { radii, spacing } from '@/theme/spacing';
 import { typography } from '@/theme/typography';
 
@@ -47,6 +47,7 @@ export function BottomSheet({
   title,
   visible,
 }: BottomSheetProps) {
+  const { styles } = useBottomSheetStyles();
   const bottomSheetRef = useRef<BottomSheetModal>(null);
   const resolvedSnapPoints = useMemo(() => snapPoints, [snapPoints]);
 
@@ -114,6 +115,7 @@ export function SheetOption({
   onPress,
   selected = false,
 }: SheetOptionProps) {
+  const { colors, styles } = useBottomSheetStyles();
   const inactive = disabled || isBusy;
 
   return (
@@ -165,7 +167,15 @@ export function SheetOption({
   );
 }
 
-const styles = StyleSheet.create({
+function useBottomSheetStyles() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
+
+  return { colors, styles };
+}
+
+function makeStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   content: {
     gap: spacing.lg,
     paddingBottom: spacing.xxxl,
@@ -241,4 +251,5 @@ const styles = StyleSheet.create({
     fontWeight: typography.weight.black,
     lineHeight: typography.lineHeight.lg,
   },
-});
+  });
+}

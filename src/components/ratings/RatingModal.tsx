@@ -1,5 +1,5 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { colors } from '@/theme/colors';
+import { useTheme, type ThemeColors } from '@/theme/ThemeProvider';
 import { radii, spacing } from '@/theme/spacing';
 import { typography } from '@/theme/typography';
 
@@ -53,6 +53,7 @@ export function RatingModal({
   visible,
   wineTitle,
 }: Props) {
+  const { colors, styles } = useRatingModalStyles();
   const insets = useSafeAreaInsets();
   const [formValue, setFormValue] = useState<RatingFormValue>(initialValue);
   const saveDisabled = isSaving || formValue.stars === 0;
@@ -129,7 +130,15 @@ export function RatingModal({
   );
 }
 
-const styles = StyleSheet.create({
+function useRatingModalStyles() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
+
+  return { colors, styles };
+}
+
+function makeStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   content: {
     gap: spacing.xxxl,
     paddingHorizontal: spacing.screenX,
@@ -187,4 +196,5 @@ const styles = StyleSheet.create({
     lineHeight: typography.lineHeight.lg,
     textAlign: 'center',
   },
-});
+  });
+}
