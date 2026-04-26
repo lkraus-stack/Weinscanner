@@ -2,6 +2,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { Image } from 'expo-image';
 import { memo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import Animated, { FadeIn } from 'react-native-reanimated';
 
 import type { HistoryItemRecord, WineColor } from '@/hooks/useHistory';
 import { colors } from '@/theme/colors';
@@ -38,6 +39,8 @@ const COLOR_SWATCH_STYLES = StyleSheet.create({
 });
 
 type Props = {
+  animateEntry?: boolean;
+  animationIndex?: number;
   item: HistoryItemRecord;
   onPress: (item: HistoryItemRecord) => void;
   onRate: (item: HistoryItemRecord) => void;
@@ -48,6 +51,8 @@ function joinMeta(parts: (string | null | undefined)[]) {
 }
 
 export const HistoryItem = memo(function HistoryItem({
+  animateEntry = false,
+  animationIndex = 0,
   item,
   onPress,
   onRate,
@@ -58,98 +63,103 @@ export const HistoryItem = memo(function HistoryItem({
     ? COLOR_SWATCH_STYLES[item.wineColor]
     : COLOR_SWATCH_STYLES.unknown;
   const hasRating = typeof item.ratingStars === 'number';
+  const entering = animateEntry
+    ? FadeIn.delay(Math.min(animationIndex, 8) * 50).duration(300)
+    : undefined;
 
   return (
-    <Pressable
-      accessibilityRole="button"
-      onPress={() => onPress(item)}
-      style={({ pressed }) => [
-        styles.card,
-        pressed && styles.pressed,
-      ]}
-    >
-      <View style={styles.thumbnailFrame}>
-        {item.labelImageUrl ? (
-          <Image
-            source={{ uri: item.labelImageUrl }}
-            style={styles.thumbnail}
-            contentFit="cover"
-            cachePolicy="memory-disk"
-          />
-        ) : (
-          <Ionicons name="wine-outline" size={28} color={colors.primaryDark} />
-        )}
-
-        {hasRating ? (
-          <Pressable
-            accessibilityLabel="Bewertung bearbeiten"
-            accessibilityRole="button"
-            onPress={(event) => {
-              event.stopPropagation();
-              onRate(item);
-            }}
-            style={styles.ratingBadge}
-          >
-            <Text style={styles.ratingBadgeText}>★ {item.ratingStars}</Text>
-          </Pressable>
-        ) : null}
-      </View>
-
-      <View style={styles.content}>
-        <View style={styles.titleRow}>
-          <Text style={styles.title} numberOfLines={2}>
-            {item.producer} {item.wineName}
-          </Text>
-          <Text style={styles.year}>{item.vintageYear}</Text>
-        </View>
-
-        {regionLine ? (
-          <Text style={styles.meta} numberOfLines={1}>
-            {regionLine}
-          </Text>
-        ) : null}
-
-        {item.grapeVariety ? (
-          <Text style={styles.meta} numberOfLines={1}>
-            {item.grapeVariety}
-          </Text>
-        ) : null}
-
-        <View style={styles.footer}>
-          <View style={styles.colorPill}>
-            <View
-              style={[
-                styles.swatch,
-                swatchStyle,
-              ]}
+    <Animated.View entering={entering}>
+      <Pressable
+        accessibilityRole="button"
+        onPress={() => onPress(item)}
+        style={({ pressed }) => [
+          styles.card,
+          pressed && styles.pressed,
+        ]}
+      >
+        <View style={styles.thumbnailFrame}>
+          {item.labelImageUrl ? (
+            <Image
+              source={{ uri: item.labelImageUrl }}
+              style={styles.thumbnail}
+              contentFit="cover"
+              cachePolicy="memory-disk"
             />
-            <Text style={styles.colorLabel}>{colorLabel}</Text>
-          </View>
-          {!hasRating ? (
+          ) : (
+            <Ionicons name="wine-outline" size={28} color={colors.primaryDark} />
+          )}
+
+          {hasRating ? (
             <Pressable
+              accessibilityLabel="Bewertung bearbeiten"
               accessibilityRole="button"
               onPress={(event) => {
                 event.stopPropagation();
                 onRate(item);
               }}
-              style={styles.rateButton}
+              style={styles.ratingBadge}
             >
-              <Ionicons
-                name="star-outline"
-                size={14}
-                color={colors.primaryDark}
-              />
-              <Text style={styles.rateButtonText}>Bewerten</Text>
+              <Text style={styles.ratingBadgeText}>★ {item.ratingStars}</Text>
             </Pressable>
           ) : null}
-          <Ionicons
-            name="chevron-forward"
-            size={18}
-            color={colors.textSecondary}
-          />
         </View>
-      </View>
-    </Pressable>
+
+        <View style={styles.content}>
+          <View style={styles.titleRow}>
+            <Text style={styles.title} numberOfLines={2}>
+              {item.producer} {item.wineName}
+            </Text>
+            <Text style={styles.year}>{item.vintageYear}</Text>
+          </View>
+
+          {regionLine ? (
+            <Text style={styles.meta} numberOfLines={1}>
+              {regionLine}
+            </Text>
+          ) : null}
+
+          {item.grapeVariety ? (
+            <Text style={styles.meta} numberOfLines={1}>
+              {item.grapeVariety}
+            </Text>
+          ) : null}
+
+          <View style={styles.footer}>
+            <View style={styles.colorPill}>
+              <View
+                style={[
+                  styles.swatch,
+                  swatchStyle,
+                ]}
+              />
+              <Text style={styles.colorLabel}>{colorLabel}</Text>
+            </View>
+            {!hasRating ? (
+              <Pressable
+                accessibilityRole="button"
+                onPress={(event) => {
+                  event.stopPropagation();
+                  onRate(item);
+                }}
+                style={styles.rateButton}
+              >
+                <Ionicons
+                  name="star-outline"
+                  size={14}
+                  color={colors.primaryDark}
+                />
+                <Text style={styles.rateButtonText}>Bewerten</Text>
+              </Pressable>
+            ) : null}
+            <Ionicons
+              name="chevron-forward"
+              size={18}
+              color={colors.textSecondary}
+            />
+          </View>
+        </View>
+      </Pressable>
+    </Animated.View>
   );
 });
 

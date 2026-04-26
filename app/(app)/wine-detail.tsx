@@ -14,6 +14,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import Animated, { FadeIn } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
@@ -722,7 +723,7 @@ function WineDetailContent({
         contentContainerStyle={[styles.content, { paddingBottom }]}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.photoFrame}>
+        <Animated.View entering={FadeIn.duration(400)} style={styles.photoFrame}>
           {imageUrl ? (
             <Image
               cachePolicy="memory-disk"
@@ -736,7 +737,7 @@ function WineDetailContent({
               <Ionicons name="wine-outline" size={42} color={colors.primaryDark} />
             </View>
           )}
-        </View>
+        </Animated.View>
 
         <View style={styles.summary}>
           <Text style={styles.title}>{buildTitle(detail)}</Text>

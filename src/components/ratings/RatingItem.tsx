@@ -2,6 +2,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { Image } from 'expo-image';
 import { memo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import Animated, { FadeIn } from 'react-native-reanimated';
 
 import type { RatingListItem } from '@/hooks/useRatings';
 import { colors } from '@/theme/colors';
@@ -9,6 +10,8 @@ import { radii, spacing } from '@/theme/spacing';
 import { typography } from '@/theme/typography';
 
 type Props = {
+  animateEntry?: boolean;
+  animationIndex?: number;
   item: RatingListItem;
   onMore: (item: RatingListItem) => void;
   onPress: (item: RatingListItem) => void;
@@ -52,6 +55,8 @@ function getNoteExcerpt(value: string | null) {
 }
 
 export const RatingItem = memo(function RatingItem({
+  animateEntry = false,
+  animationIndex = 0,
   item,
   onMore,
   onPress,
@@ -62,83 +67,88 @@ export const RatingItem = memo(function RatingItem({
   const subline = [formatDate(item.drank_at), item.occasion]
     .filter(Boolean)
     .join(' · ');
+  const entering = animateEntry
+    ? FadeIn.delay(Math.min(animationIndex, 8) * 50).duration(300)
+    : undefined;
 
   return (
-    <Pressable
-      accessibilityRole="button"
-      onPress={() => onPress(item)}
-      style={({ pressed }) => [styles.card, pressed && styles.pressed]}
-    >
-      <View style={styles.thumbnailFrame}>
-        {item.scan?.signed_url ? (
-          <Image
-            cachePolicy="memory-disk"
-            contentFit="cover"
-            source={{ uri: item.scan.signed_url }}
-            style={styles.thumbnail}
-          />
-        ) : (
-          <Ionicons name="wine-outline" size={28} color={colors.primaryDark} />
-        )}
-      </View>
+    <Animated.View entering={entering}>
+      <Pressable
+        accessibilityRole="button"
+        onPress={() => onPress(item)}
+        style={({ pressed }) => [styles.card, pressed && styles.pressed]}
+      >
+        <View style={styles.thumbnailFrame}>
+          {item.scan?.signed_url ? (
+            <Image
+              cachePolicy="memory-disk"
+              contentFit="cover"
+              source={{ uri: item.scan.signed_url }}
+              style={styles.thumbnail}
+            />
+          ) : (
+            <Ionicons name="wine-outline" size={28} color={colors.primaryDark} />
+          )}
+        </View>
 
-      <View style={styles.content}>
-        <View style={styles.titleRow}>
-          <View style={styles.titleBlock}>
-            <Text numberOfLines={2} style={styles.title}>
-              {buildWineTitle(item)}
-            </Text>
-            <Text style={styles.vintage}>
-              {item.vintage?.vintage_year ?? 'Jahrgang offen'}
-            </Text>
+        <View style={styles.content}>
+          <View style={styles.titleRow}>
+            <View style={styles.titleBlock}>
+              <Text numberOfLines={2} style={styles.title}>
+                {buildWineTitle(item)}
+              </Text>
+              <Text style={styles.vintage}>
+                {item.vintage?.vintage_year ?? 'Jahrgang offen'}
+              </Text>
+            </View>
+
+            <Pressable
+              accessibilityLabel="Bewertungsaktionen öffnen"
+              accessibilityRole="button"
+              onPress={(event) => {
+                event.stopPropagation();
+                onMore(item);
+              }}
+              style={styles.moreButton}
+            >
+              <Ionicons
+                name="ellipsis-horizontal"
+                size={20}
+                color={colors.textSecondary}
+              />
+            </Pressable>
           </View>
 
-          <Pressable
-            accessibilityLabel="Bewertungsaktionen öffnen"
-            accessibilityRole="button"
-            onPress={(event) => {
-              event.stopPropagation();
-              onMore(item);
-            }}
-            style={styles.moreButton}
-          >
-            <Ionicons
-              name="ellipsis-horizontal"
-              size={20}
-              color={colors.textSecondary}
-            />
-          </Pressable>
-        </View>
+          <View style={styles.starRow}>
+            {Array.from({ length: 5 }).map((_, index) => (
+              <Ionicons
+                key={index}
+                name={index < stars ? 'star' : 'star-outline'}
+                size={16}
+                color={colors.warning}
+              />
+            ))}
+          </View>
 
-        <View style={styles.starRow}>
-          {Array.from({ length: 5 }).map((_, index) => (
-            <Ionicons
-              key={index}
-              name={index < stars ? 'star' : 'star-outline'}
-              size={16}
-              color={colors.warning}
-            />
-          ))}
-        </View>
-
-        {noteExcerpt ? (
-          <Text numberOfLines={2} style={styles.note}>
-            {noteExcerpt}
-          </Text>
-        ) : null}
-
-        <View style={styles.footer}>
-          <Text numberOfLines={1} style={styles.subline}>
-            {subline}
-          </Text>
-          {wine?.region || wine?.country ? (
-            <Text numberOfLines={1} style={styles.region}>
-              {[wine.region, wine.country].filter(Boolean).join(', ')}
+          {noteExcerpt ? (
+            <Text numberOfLines={2} style={styles.note}>
+              {noteExcerpt}
             </Text>
           ) : null}
+
+          <View style={styles.footer}>
+            <Text numberOfLines={1} style={styles.subline}>
+              {subline}
+            </Text>
+            {wine?.region || wine?.country ? (
+              <Text numberOfLines={1} style={styles.region}>
+                {[wine.region, wine.country].filter(Boolean).join(', ')}
+              </Text>
+            ) : null}
+          </View>
         </View>
-      </View>
-    </Pressable>
+      </Pressable>
+    </Animated.View>
   );
 });
 

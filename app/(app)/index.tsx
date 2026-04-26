@@ -2,7 +2,7 @@ import { FlashList, type ListRenderItemInfo } from '@shopify/flash-list';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -138,6 +138,8 @@ export default function HistoryScreen() {
   const [ratingInitialValue, setRatingInitialValue] =
     useState<RatingFormValue>(() => createEmptyRatingFormValue());
   const [isRatingModalVisible, setIsRatingModalVisible] = useState(false);
+  const [hasPlayedInitialAnimation, setHasPlayedInitialAnimation] =
+    useState(false);
   const historyQuery = useHistory({ searchQuery, wineColor });
   const items = useMemo(
     () => historyQuery.data?.pages.flatMap((page) => page.data) ?? [],
@@ -148,8 +150,22 @@ export default function HistoryScreen() {
     [items]
   );
   const isInitialLoading = historyQuery.isLoading;
+  const shouldAnimateInitialItems =
+    !hasPlayedInitialAnimation && !isInitialLoading && items.length > 0;
   const hasActiveFilters = Boolean(wineColor || searchQuery.trim().length > 1);
   const ratingSubmitLabel = selectedRating ? 'Aktualisieren' : 'Speichern';
+
+  useEffect(() => {
+    if (!shouldAnimateInitialItems) {
+      return undefined;
+    }
+
+    const timeout = setTimeout(() => {
+      setHasPlayedInitialAnimation(true);
+    }, 850);
+
+    return () => clearTimeout(timeout);
+  }, [shouldAnimateInitialItems]);
 
   const openDetail = useCallback(
     (item: HistoryItemRecord) => {
@@ -237,20 +253,22 @@ export default function HistoryScreen() {
   }, [historyQuery]);
 
   const renderItem = useCallback(
-    ({ item }: ListRenderItemInfo<HistoryListRow>) => {
+    ({ index, item }: ListRenderItemInfo<HistoryListRow>) => {
       if (item.type === 'month') {
         return <MonthHeader title={item.title} />;
       }
 
       return (
         <HistoryItem
+          animateEntry={shouldAnimateInitialItems}
+          animationIndex={index}
           item={item.item}
           onPress={openDetail}
           onRate={openRatingModal}
         />
       );
     },
-    [openDetail, openRatingModal]
+    [openDetail, openRatingModal, shouldAnimateInitialItems]
   );
 
   const renderFooter = useCallback(() => {

@@ -2,6 +2,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { Image } from 'expo-image';
 import { memo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import Animated, { FadeIn } from 'react-native-reanimated';
 
 import type { InventoryListItem } from '@/hooks/useInventory';
 import { colors } from '@/theme/colors';
@@ -9,6 +10,8 @@ import { radii, spacing } from '@/theme/spacing';
 import { typography } from '@/theme/typography';
 
 type Props = {
+  animateEntry?: boolean;
+  animationIndex?: number;
   item: InventoryListItem;
   onDrink: (item: InventoryListItem) => void;
   onMore: (item: InventoryListItem) => void;
@@ -64,6 +67,8 @@ function getNoteExcerpt(value: string | null) {
 }
 
 export const InventoryItem = memo(function InventoryItem({
+  animateEntry = false,
+  animationIndex = 0,
   item,
   onDrink,
   onMore,
@@ -79,102 +84,107 @@ export const InventoryItem = memo(function InventoryItem({
   ]
     .filter(Boolean)
     .join(' · ');
+  const entering = animateEntry
+    ? FadeIn.delay(Math.min(animationIndex, 8) * 50).duration(300)
+    : undefined;
 
   return (
-    <View style={[styles.card, isEmpty && styles.emptyCard]}>
-      <View style={styles.thumbnailFrame}>
-        {item.imageUrl ? (
-          <Image
-            cachePolicy="memory-disk"
-            contentFit="cover"
-            source={{ uri: item.imageUrl }}
-            style={styles.thumbnail}
-          />
-        ) : (
-          <Ionicons name="wine-outline" size={28} color={colors.primaryDark} />
-        )}
-      </View>
-
-      <View style={styles.content}>
-        <View style={styles.titleRow}>
-          <View style={styles.titleBlock}>
-            <Text numberOfLines={2} style={styles.title}>
-              {buildWineTitle(item)}
-            </Text>
-            <Text style={styles.vintage}>
-              {item.vintage?.vintage_year ?? 'Jahrgang offen'}
-            </Text>
-          </View>
-
-          <Pressable
-            accessibilityLabel="Bestandsaktionen öffnen"
-            accessibilityRole="button"
-            onPress={() => onMore(item)}
-            style={styles.moreButton}
-          >
-            <Ionicons
-              color={colors.textSecondary}
-              name="ellipsis-horizontal"
-              size={20}
+    <Animated.View entering={entering}>
+      <View style={[styles.card, isEmpty && styles.emptyCard]}>
+        <View style={styles.thumbnailFrame}>
+          {item.imageUrl ? (
+            <Image
+              cachePolicy="memory-disk"
+              contentFit="cover"
+              source={{ uri: item.imageUrl }}
+              style={styles.thumbnail}
             />
-          </Pressable>
+          ) : (
+            <Ionicons name="wine-outline" size={28} color={colors.primaryDark} />
+          )}
         </View>
 
-        <View style={styles.badgeRow}>
-          <View style={[styles.quantityBadge, isEmpty && styles.emptyBadge]}>
-            <Text
-              style={[
-                styles.quantityBadgeText,
-                isEmpty && styles.emptyBadgeText,
-              ]}
+        <View style={styles.content}>
+          <View style={styles.titleRow}>
+            <View style={styles.titleBlock}>
+              <Text numberOfLines={2} style={styles.title}>
+                {buildWineTitle(item)}
+              </Text>
+              <Text style={styles.vintage}>
+                {item.vintage?.vintage_year ?? 'Jahrgang offen'}
+              </Text>
+            </View>
+
+            <Pressable
+              accessibilityLabel="Bestandsaktionen öffnen"
+              accessibilityRole="button"
+              onPress={() => onMore(item)}
+              style={styles.moreButton}
             >
-              {isEmpty ? 'Leer' : bottleLabel(quantity)}
-            </Text>
+              <Ionicons
+                color={colors.textSecondary}
+                name="ellipsis-horizontal"
+                size={20}
+              />
+            </Pressable>
           </View>
 
-          {wine?.region || wine?.country ? (
-            <Text numberOfLines={1} style={styles.region}>
-              {[wine.region, wine.country].filter(Boolean).join(', ')}
+          <View style={styles.badgeRow}>
+            <View style={[styles.quantityBadge, isEmpty && styles.emptyBadge]}>
+              <Text
+                style={[
+                  styles.quantityBadgeText,
+                  isEmpty && styles.emptyBadgeText,
+                ]}
+              >
+                {isEmpty ? 'Leer' : bottleLabel(quantity)}
+              </Text>
+            </View>
+
+            {wine?.region || wine?.country ? (
+              <Text numberOfLines={1} style={styles.region}>
+                {[wine.region, wine.country].filter(Boolean).join(', ')}
+              </Text>
+            ) : null}
+          </View>
+
+          <Text numberOfLines={1} style={styles.meta}>
+            {meta}
+          </Text>
+
+          {noteExcerpt ? (
+            <Text numberOfLines={2} style={styles.note}>
+              {noteExcerpt}
             </Text>
           ) : null}
-        </View>
 
-        <Text numberOfLines={1} style={styles.meta}>
-          {meta}
-        </Text>
-
-        {noteExcerpt ? (
-          <Text numberOfLines={2} style={styles.note}>
-            {noteExcerpt}
-          </Text>
-        ) : null}
-
-        <Pressable
-          accessibilityRole="button"
-          disabled={isEmpty}
-          onPress={() => onDrink(item)}
-          style={({ pressed }) => [
-            styles.drinkButton,
-            pressed && styles.pressed,
-            isEmpty && styles.drinkButtonDisabled,
-          ]}
-        >
-          <Ionicons
-            color={isEmpty ? colors.textSecondary : colors.primaryDark}
-            name="remove-circle-outline"
-            size={18}
-          />
-          <Text
-            style={[
-              styles.drinkButtonText,
-              isEmpty && styles.drinkButtonTextDisabled,
+          <Pressable
+            accessibilityRole="button"
+            disabled={isEmpty}
+            onPress={() => onDrink(item)}
+            style={({ pressed }) => [
+              styles.drinkButton,
+              pressed && styles.pressed,
+              isEmpty && styles.drinkButtonDisabled,
             ]}
           >
-            Eine getrunken
-          </Text>
-        </Pressable>
+            <Ionicons
+              color={isEmpty ? colors.textSecondary : colors.primaryDark}
+              name="remove-circle-outline"
+              size={18}
+            />
+            <Text
+              style={[
+                styles.drinkButtonText,
+                isEmpty && styles.drinkButtonTextDisabled,
+              ]}
+            >
+              Eine getrunken
+            </Text>
+          </Pressable>
+        </View>
       </View>
-    </View>
+    </Animated.View>
   );
 });
 

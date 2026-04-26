@@ -2,7 +2,7 @@ import { FlashList, type ListRenderItemInfo } from '@shopify/flash-list';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -108,9 +108,25 @@ export default function InventoryScreen() {
     [inventoryQuery.data]
   );
   const isInitialLoading = inventoryQuery.isLoading;
+  const [hasPlayedInitialAnimation, setHasPlayedInitialAnimation] =
+    useState(false);
+  const shouldAnimateInitialItems =
+    !hasPlayedInitialAnimation && !isInitialLoading && items.length > 0;
   const stats = statsQuery.data;
   const locations = stats?.storageLocations ?? [];
   const hasLocationFilter = Boolean(storageLocation);
+
+  useEffect(() => {
+    if (!shouldAnimateInitialItems) {
+      return undefined;
+    }
+
+    const timeout = setTimeout(() => {
+      setHasPlayedInitialAnimation(true);
+    }, 850);
+
+    return () => clearTimeout(timeout);
+  }, [shouldAnimateInitialItems]);
 
   async function invalidateInventoryCaches(item?: InventoryListItem | null) {
     await Promise.all([
@@ -203,14 +219,16 @@ export default function InventoryScreen() {
   }, []);
 
   const renderItem = useCallback(
-    ({ item }: ListRenderItemInfo<InventoryListItem>) => (
+    ({ index, item }: ListRenderItemInfo<InventoryListItem>) => (
       <InventoryItem
+        animateEntry={shouldAnimateInitialItems}
+        animationIndex={index}
         item={item}
         onDrink={(inventoryItem) => decrementMutation.mutate(inventoryItem)}
         onMore={openActions}
       />
     ),
-    [decrementMutation, openActions]
+    [decrementMutation, openActions, shouldAnimateInitialItems]
   );
 
   const renderFooter = useCallback(() => {
