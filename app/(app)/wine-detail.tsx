@@ -27,6 +27,7 @@ import {
   type RatingFormValue,
 } from '@/components/ratings/RatingModal';
 import { VintageYearPicker } from '@/components/scan/VintageYearPicker';
+import { WineDetailSkeleton } from '@/components/skeletons/WineDetailSkeleton';
 import { AromaGrid } from '@/components/wine-detail/AromaGrid';
 import {
   type ScanDetail,
@@ -336,10 +337,7 @@ export default function WineDetailScreen() {
       ) : null}
 
       {scanId && scanDetailQuery.isLoading ? (
-        <View style={styles.loadingState}>
-          <ActivityIndicator color={colors.primary} size="large" />
-          <Text style={styles.loadingText}>Weindaten werden geladen...</Text>
-        </View>
+        <WineDetailSkeleton paddingBottom={insets.bottom + 120} />
       ) : null}
 
       {scanId && scanDetailQuery.isError ? (
@@ -1453,17 +1451,6 @@ const styles = StyleSheet.create({
     fontSize: typography.size.base,
     fontWeight: typography.weight.extraBold,
     lineHeight: typography.lineHeight.base,
-  },
-  loadingState: {
-    alignItems: 'center',
-    flex: 1,
-    gap: spacing.lg,
-    justifyContent: 'center',
-  },
-  loadingText: {
-    color: colors.textSecondary,
-    fontSize: typography.size.base,
-    fontWeight: typography.weight.bold,
   },
   modalActionRow: {
     flexDirection: 'row',

@@ -23,6 +23,7 @@ import {
   RatingModal,
   type RatingFormValue,
 } from '@/components/ratings/RatingModal';
+import { HistoryItemSkeleton } from '@/components/skeletons/HistoryItemSkeleton';
 import {
   type HistoryItemRecord,
   useHistory,
@@ -47,6 +48,8 @@ const MONTH_FORMATTER = new Intl.DateTimeFormat('de-DE', {
   month: 'long',
   year: 'numeric',
 });
+
+const SKELETON_ROWS = Array.from({ length: 5 }, (_, index) => index);
 
 function getMonthKey(value: string) {
   const date = new Date(value);
@@ -265,9 +268,10 @@ export default function HistoryScreen() {
   const listEmptyComponent = useCallback(() => {
     if (isInitialLoading) {
       return (
-        <View style={styles.loadingState}>
-          <ActivityIndicator color={colors.primary} />
-          <Text style={styles.loadingText}>Verlauf wird geladen...</Text>
+        <View style={styles.skeletonList}>
+          {SKELETON_ROWS.map((item) => (
+            <HistoryItemSkeleton key={item} />
+          ))}
         </View>
       );
     }
@@ -384,20 +388,12 @@ const styles = StyleSheet.create({
   listContent: {
     paddingBottom: 110,
   },
-  loadingState: {
-    alignItems: 'center',
-    gap: spacing.md,
-    justifyContent: 'center',
-    minHeight: 300,
-  },
-  loadingText: {
-    color: colors.textSecondary,
-    fontSize: typography.size.md,
-    fontWeight: typography.weight.bold,
-  },
   screen: {
     backgroundColor: colors.background,
     flex: 1,
+  },
+  skeletonList: {
+    paddingTop: spacing.sm,
   },
   title: {
     color: colors.text,

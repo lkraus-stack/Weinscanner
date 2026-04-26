@@ -23,6 +23,7 @@ import {
   RatingModal,
   type RatingFormValue,
 } from '@/components/ratings/RatingModal';
+import { RatingItemSkeleton } from '@/components/skeletons/RatingItemSkeleton';
 import {
   type RatingListItem,
   type RatingsFilters,
@@ -48,6 +49,8 @@ const STAR_FILTERS: { label: string; value?: StarFilter }[] = [
   { label: '4★+', value: 4 },
   { label: '3★+', value: 3 },
 ];
+
+const SKELETON_ROWS = Array.from({ length: 5 }, (_, index) => index);
 
 function getErrorMessage(error: unknown) {
   if (error instanceof Error && error.message) {
@@ -216,9 +219,10 @@ export default function RatingsScreen() {
   const listEmptyComponent = useCallback(() => {
     if (isInitialLoading) {
       return (
-        <View style={styles.loadingState}>
-          <ActivityIndicator color={colors.primary} />
-          <Text style={styles.loadingText}>Bewertungen werden geladen...</Text>
+        <View style={styles.skeletonList}>
+          {SKELETON_ROWS.map((item) => (
+            <RatingItemSkeleton key={item} />
+          ))}
         </View>
       );
     }
@@ -553,17 +557,6 @@ const styles = StyleSheet.create({
   listContent: {
     paddingBottom: 110,
   },
-  loadingState: {
-    alignItems: 'center',
-    gap: spacing.md,
-    justifyContent: 'center',
-    minHeight: 300,
-  },
-  loadingText: {
-    color: colors.textSecondary,
-    fontSize: typography.size.md,
-    fontWeight: typography.weight.bold,
-  },
   modalBackdrop: {
     flex: 1,
   },
@@ -618,6 +611,9 @@ const styles = StyleSheet.create({
   screen: {
     backgroundColor: colors.background,
     flex: 1,
+  },
+  skeletonList: {
+    paddingTop: spacing.sm,
   },
   segmentedControl: {
     backgroundColor: colors.surfaceWarm,

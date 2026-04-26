@@ -24,6 +24,7 @@ import {
   type InventoryFormValue,
 } from '@/components/inventory/AddInventoryModal';
 import { InventoryItem } from '@/components/inventory/InventoryItem';
+import { InventoryItemSkeleton } from '@/components/skeletons/InventoryItemSkeleton';
 import {
   type InventoryListItem,
   useInventory,
@@ -47,6 +48,8 @@ function getErrorMessage(error: unknown) {
 
   return 'Bitte versuche es noch einmal.';
 }
+
+const SKELETON_ROWS = Array.from({ length: 5 }, (_, index) => index);
 
 function formatCurrency(value: number) {
   return `${value.toLocaleString('de-DE', {
@@ -226,9 +229,10 @@ export default function InventoryScreen() {
   const listEmptyComponent = useCallback(() => {
     if (isInitialLoading) {
       return (
-        <View style={styles.loadingState}>
-          <ActivityIndicator color={colors.primary} />
-          <Text style={styles.loadingText}>Bestand wird geladen...</Text>
+        <View style={styles.skeletonList}>
+          {SKELETON_ROWS.map((item) => (
+            <InventoryItemSkeleton key={item} />
+          ))}
         </View>
       );
     }
@@ -580,17 +584,6 @@ const styles = StyleSheet.create({
   listContent: {
     paddingBottom: 110,
   },
-  loadingState: {
-    alignItems: 'center',
-    gap: spacing.md,
-    justifyContent: 'center',
-    minHeight: 300,
-  },
-  loadingText: {
-    color: colors.textSecondary,
-    fontSize: typography.size.md,
-    fontWeight: typography.weight.bold,
-  },
   locationPill: {
     alignItems: 'center',
     backgroundColor: colors.surfaceWarm,
@@ -667,6 +660,9 @@ const styles = StyleSheet.create({
   screen: {
     backgroundColor: colors.background,
     flex: 1,
+  },
+  skeletonList: {
+    paddingTop: spacing.sm,
   },
   statCard: {
     backgroundColor: colors.surface,

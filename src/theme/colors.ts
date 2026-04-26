@@ -2,6 +2,8 @@ export const colors = {
   background: '#FAF7F2',
   surface: '#FFFFFF',
   surfaceWarm: '#FFFDF9',
+  skeletonBase: '#EFE8DC',
+  skeletonHighlight: '#FFF9F0',
   primary: '#B85C4A',
   primaryDark: '#8B3A2A',
   text: '#1A1A1A',
