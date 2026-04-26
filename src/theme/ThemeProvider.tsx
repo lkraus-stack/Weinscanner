@@ -12,6 +12,8 @@ import {
   type ThemeColors,
 } from '@/theme/colors';
 
+export type { ThemeColors } from '@/theme/colors';
+
 export type ThemeMode = 'auto' | 'dark' | 'light';
 export type ResolvedTheme = 'dark' | 'light';
 

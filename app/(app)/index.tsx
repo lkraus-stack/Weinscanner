@@ -36,8 +36,8 @@ import {
   updateRating,
 } from '@/lib/ratings';
 import { useToastStore } from '@/stores/toast-store';
-import { colors } from '@/theme/colors';
 import { spacing } from '@/theme/spacing';
+import { useTheme, type ThemeColors } from '@/theme/ThemeProvider';
 import { typography } from '@/theme/typography';
 
 type HistoryListRow =
@@ -127,6 +127,8 @@ export default function HistoryScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const insets = useSafeAreaInsets();
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const showToast = useToastStore((state) => state.showToast);
   const [wineColor, setWineColor] = useState<WineColor | undefined>();
   const [searchQuery, setSearchQuery] = useState('');
@@ -281,7 +283,7 @@ export default function HistoryScreen() {
         <ActivityIndicator color={colors.primary} />
       </View>
     );
-  }, [historyQuery.isFetchingNextPage]);
+  }, [colors.primary, historyQuery.isFetchingNextPage, styles]);
 
   const listEmptyComponent = useCallback(() => {
     if (isInitialLoading) {
@@ -329,7 +331,7 @@ export default function HistoryScreen() {
         }}
       />
     );
-  }, [hasActiveFilters, historyQuery, isInitialLoading, router]);
+  }, [hasActiveFilters, historyQuery, isInitialLoading, router, styles]);
 
   return (
     <View style={styles.screen}>
@@ -379,7 +381,8 @@ export default function HistoryScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function makeStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   eyebrow: {
     color: colors.primaryDark,
     fontSize: typography.size.sm,
@@ -420,4 +423,5 @@ const styles = StyleSheet.create({
     letterSpacing: 0,
     lineHeight: typography.lineHeight.brand,
   },
-});
+  });
+}

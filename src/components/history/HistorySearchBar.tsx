@@ -1,9 +1,9 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 
-import { colors } from '@/theme/colors';
 import { radii, spacing } from '@/theme/spacing';
+import { useTheme, type ThemeColors } from '@/theme/ThemeProvider';
 import { typography } from '@/theme/typography';
 
 type Props = {
@@ -14,6 +14,8 @@ type Props = {
 const SEARCH_DEBOUNCE_MS = 300;
 
 export function HistorySearchBar({ onDebouncedChange, value }: Props) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const [draftValue, setDraftValue] = useState(value);
 
   useEffect(() => {
@@ -60,7 +62,8 @@ export function HistorySearchBar({ onDebouncedChange, value }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+function makeStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   clearButton: {
     alignItems: 'center',
     height: 32,
@@ -85,4 +88,5 @@ const styles = StyleSheet.create({
     fontWeight: typography.weight.medium,
     minWidth: 0,
   },
-});
+  });
+}

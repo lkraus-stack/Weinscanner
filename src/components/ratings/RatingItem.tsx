@@ -1,12 +1,12 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Image } from 'expo-image';
-import { memo } from 'react';
+import { memo, useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 
 import type { RatingListItem } from '@/hooks/useRatings';
-import { colors } from '@/theme/colors';
 import { radii, spacing } from '@/theme/spacing';
+import { useTheme, type ThemeColors } from '@/theme/ThemeProvider';
 import { typography } from '@/theme/typography';
 
 type Props = {
@@ -61,6 +61,8 @@ export const RatingItem = memo(function RatingItem({
   onMore,
   onPress,
 }: Props) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const noteExcerpt = getNoteExcerpt(item.notes);
   const stars = item.stars ?? 0;
   const wine = item.vintage?.wine;
@@ -152,7 +154,8 @@ export const RatingItem = memo(function RatingItem({
   );
 });
 
-const styles = StyleSheet.create({
+function makeStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   card: {
     backgroundColor: colors.surface,
     borderColor: colors.border,
@@ -240,4 +243,5 @@ const styles = StyleSheet.create({
     fontSize: typography.size.sm,
     fontWeight: typography.weight.bold,
   },
-});
+  });
+}

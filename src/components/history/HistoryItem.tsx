@@ -1,12 +1,12 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Image } from 'expo-image';
-import { memo } from 'react';
+import { memo, useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 
 import type { HistoryItemRecord, WineColor } from '@/hooks/useHistory';
-import { colors } from '@/theme/colors';
 import { radii, spacing } from '@/theme/spacing';
+import { useTheme, type ThemeColors } from '@/theme/ThemeProvider';
 import { typography } from '@/theme/typography';
 
 const COLOR_LABELS: Record<WineColor, string> = {
@@ -16,27 +16,6 @@ const COLOR_LABELS: Record<WineColor, string> = {
   suess: 'Süß',
   weiss: 'Weiß',
 };
-
-const COLOR_SWATCH_STYLES = StyleSheet.create({
-  rose: {
-    backgroundColor: colors.wineRose,
-  },
-  rot: {
-    backgroundColor: colors.wineRed,
-  },
-  schaum: {
-    backgroundColor: colors.wineSparkling,
-  },
-  suess: {
-    backgroundColor: colors.warning,
-  },
-  unknown: {
-    backgroundColor: colors.border,
-  },
-  weiss: {
-    backgroundColor: colors.wineWhite,
-  },
-});
 
 type Props = {
   animateEntry?: boolean;
@@ -50,6 +29,23 @@ function joinMeta(parts: (string | null | undefined)[]) {
   return parts.filter(Boolean).join(', ');
 }
 
+function getSwatchColor(colors: ThemeColors, wineColor?: WineColor | null) {
+  switch (wineColor) {
+    case 'rose':
+      return colors.wineRose;
+    case 'rot':
+      return colors.wineRed;
+    case 'schaum':
+      return colors.wineSparkling;
+    case 'suess':
+      return colors.warning;
+    case 'weiss':
+      return colors.wineWhite;
+    default:
+      return colors.border;
+  }
+}
+
 export const HistoryItem = memo(function HistoryItem({
   animateEntry = false,
   animationIndex = 0,
@@ -57,11 +53,11 @@ export const HistoryItem = memo(function HistoryItem({
   onPress,
   onRate,
 }: Props) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const regionLine = joinMeta([item.region, item.country]);
   const colorLabel = item.wineColor ? COLOR_LABELS[item.wineColor] : 'Unklar';
-  const swatchStyle = item.wineColor
-    ? COLOR_SWATCH_STYLES[item.wineColor]
-    : COLOR_SWATCH_STYLES.unknown;
+  const swatchStyle = { backgroundColor: getSwatchColor(colors, item.wineColor) };
   const hasRating = typeof item.ratingStars === 'number';
   const entering = animateEntry
     ? FadeIn.delay(Math.min(animationIndex, 8) * 50).duration(300)
@@ -163,7 +159,8 @@ export const HistoryItem = memo(function HistoryItem({
   );
 });
 
-const styles = StyleSheet.create({
+function makeStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   card: {
     backgroundColor: colors.surface,
     borderColor: colors.border,
@@ -287,4 +284,5 @@ const styles = StyleSheet.create({
     fontWeight: typography.weight.black,
     lineHeight: typography.lineHeight.lg,
   },
-});
+  });
+}

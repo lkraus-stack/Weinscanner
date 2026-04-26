@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import {
   type DimensionValue,
   StyleSheet,
@@ -15,8 +15,8 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
-import { colors } from '@/theme/colors';
 import { radii } from '@/theme/spacing';
+import { useTheme, type ThemeColors } from '@/theme/ThemeProvider';
 
 type Props = {
   borderRadius?: number;
@@ -33,6 +33,8 @@ export function SkeletonBox({
   style,
   width = '100%',
 }: Props) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const progress = useSharedValue(0);
 
   useEffect(() => {
@@ -81,7 +83,8 @@ export function SkeletonBox({
   );
 }
 
-const styles = StyleSheet.create({
+function makeStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   box: {
     backgroundColor: colors.skeletonBase,
     overflow: 'hidden',
@@ -93,4 +96,5 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 0,
   },
-});
+  });
+}

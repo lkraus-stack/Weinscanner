@@ -1,11 +1,15 @@
+import { useMemo } from 'react';
 import { StyleSheet, View } from 'react-native';
 
-import { colors } from '@/theme/colors';
 import { radii, spacing } from '@/theme/spacing';
+import { useTheme, type ThemeColors } from '@/theme/ThemeProvider';
 
 import { SkeletonBox } from './SkeletonBox';
 
 export function HistoryItemSkeleton() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
+
   return (
     <View pointerEvents="none" style={styles.card}>
       <SkeletonBox borderRadius={radii.sm} height={80} width={80} />
@@ -31,7 +35,8 @@ export function HistoryItemSkeleton() {
   );
 }
 
-const styles = StyleSheet.create({
+function makeStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   card: {
     backgroundColor: colors.surface,
     borderColor: colors.border,
@@ -64,4 +69,5 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: spacing.sm,
   },
-});
+  });
+}

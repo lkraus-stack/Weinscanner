@@ -1,12 +1,12 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Image } from 'expo-image';
-import { memo } from 'react';
+import { memo, useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 
 import type { InventoryListItem } from '@/hooks/useInventory';
-import { colors } from '@/theme/colors';
 import { radii, spacing } from '@/theme/spacing';
+import { useTheme, type ThemeColors } from '@/theme/ThemeProvider';
 import { typography } from '@/theme/typography';
 
 type Props = {
@@ -73,6 +73,8 @@ export const InventoryItem = memo(function InventoryItem({
   onDrink,
   onMore,
 }: Props) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const quantity = item.quantity ?? 0;
   const isEmpty = quantity === 0;
   const noteExcerpt = getNoteExcerpt(item.notes);
@@ -188,7 +190,8 @@ export const InventoryItem = memo(function InventoryItem({
   );
 });
 
-const styles = StyleSheet.create({
+function makeStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   badgeRow: {
     alignItems: 'center',
     flexDirection: 'row',
@@ -323,4 +326,5 @@ const styles = StyleSheet.create({
     fontSize: typography.size.sm,
     fontWeight: typography.weight.bold,
   },
-});
+  });
+}

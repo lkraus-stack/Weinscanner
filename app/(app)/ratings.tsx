@@ -30,8 +30,8 @@ import {
 } from '@/hooks/useRatings';
 import { deleteRating, updateRating } from '@/lib/ratings';
 import { useToastStore } from '@/stores/toast-store';
-import { colors } from '@/theme/colors';
 import { radii, spacing } from '@/theme/spacing';
+import { useTheme, type ThemeColors } from '@/theme/ThemeProvider';
 import { typography } from '@/theme/typography';
 
 type SortBy = RatingsFilters['sortBy'];
@@ -91,6 +91,8 @@ function buildWineTitle(rating: RatingListItem | null) {
 export default function RatingsScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const showToast = useToastStore((state) => state.showToast);
   const [sortBy, setSortBy] = useState<SortBy>('newest');
   const [minStars, setMinStars] = useState<StarFilter>();
@@ -235,7 +237,7 @@ export default function RatingsScreen() {
         <ActivityIndicator color={colors.primary} />
       </View>
     );
-  }, [ratingsQuery.isFetchingNextPage]);
+  }, [colors.primary, ratingsQuery.isFetchingNextPage, styles]);
 
   const listEmptyComponent = useCallback(() => {
     if (isInitialLoading) {
@@ -273,7 +275,7 @@ export default function RatingsScreen() {
         title="Noch keine Bewertungen"
       />
     );
-  }, [isInitialLoading, ratingsQuery, router]);
+  }, [isInitialLoading, ratingsQuery, router, styles]);
 
   function editSelectedRating() {
     setIsActionModalVisible(false);
@@ -431,7 +433,8 @@ function RatingActionsModal({
   );
 }
 
-const styles = StyleSheet.create({
+function makeStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   bottomSheet: {
     backgroundColor: colors.surface,
     borderTopLeftRadius: radii.lg,
@@ -599,4 +602,5 @@ const styles = StyleSheet.create({
     letterSpacing: 0,
     lineHeight: typography.lineHeight.brand,
   },
-});
+  });
+}

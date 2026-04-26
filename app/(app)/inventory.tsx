@@ -36,8 +36,8 @@ import {
   updateInventoryItem,
 } from '@/lib/inventory';
 import { useToastStore } from '@/stores/toast-store';
-import { colors } from '@/theme/colors';
 import { radii, spacing } from '@/theme/spacing';
+import { useTheme, type ThemeColors } from '@/theme/ThemeProvider';
 import { typography } from '@/theme/typography';
 
 function getErrorMessage(error: unknown) {
@@ -90,6 +90,8 @@ function buildWineTitle(item: InventoryListItem | null) {
 export default function InventoryScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const showToast = useToastStore((state) => state.showToast);
   const [storageLocation, setStorageLocation] = useState<string | undefined>();
   const [selectedItem, setSelectedItem] = useState<InventoryListItem | null>(
@@ -241,7 +243,7 @@ export default function InventoryScreen() {
         <ActivityIndicator color={colors.primary} />
       </View>
     );
-  }, [inventoryQuery.isFetchingNextPage]);
+  }, [colors.primary, inventoryQuery.isFetchingNextPage, styles]);
 
   const listEmptyComponent = useCallback(() => {
     if (isInitialLoading) {
@@ -289,7 +291,7 @@ export default function InventoryScreen() {
         title="Dein Bestand ist leer"
       />
     );
-  }, [hasLocationFilter, inventoryQuery, isInitialLoading, router]);
+  }, [hasLocationFilter, inventoryQuery, isInitialLoading, router, styles]);
 
   function editSelectedItem() {
     setIsActionModalVisible(false);
@@ -403,6 +405,9 @@ export default function InventoryScreen() {
 }
 
 function StatCard({ label, value }: { label: string; value: string }) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
+
   return (
     <View style={styles.statCard}>
       <Text numberOfLines={1} style={styles.statValue}>
@@ -422,6 +427,9 @@ function LocationPill({
   onPress: () => void;
   selected: boolean;
 }) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
+
   return (
     <Pressable
       accessibilityRole="button"
@@ -473,7 +481,8 @@ function InventoryActionsModal({
   );
 }
 
-const styles = StyleSheet.create({
+function makeStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   bottomSheet: {
     backgroundColor: colors.surface,
     borderTopLeftRadius: radii.lg,
@@ -645,4 +654,5 @@ const styles = StyleSheet.create({
     letterSpacing: 0,
     lineHeight: typography.lineHeight.brand,
   },
-});
+  });
+}
