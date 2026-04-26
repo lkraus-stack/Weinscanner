@@ -29,8 +29,8 @@ import { usePreferences } from '@/hooks/usePreferences';
 import { useProfile } from '@/hooks/useProfile';
 import { useUserStats, type UserStats } from '@/hooks/useUserStats';
 import { deleteAccount } from '@/lib/account';
-import { env } from '@/lib/env';
 import { exportUserData } from '@/lib/export';
+import { LINKS } from '@/lib/links';
 import {
   normalizePreferences,
   updateProfile,
@@ -188,18 +188,12 @@ export default function ProfileScreen() {
     }
   }
 
-  function openLegalLink(url: string | null, title: string) {
-    if (!url) {
-      Alert.alert(
-        title,
-        'Der Link ist noch nicht hinterlegt. Setze ihn über die App-Konfiguration.'
-      );
-      return;
-    }
-
-    Linking.openURL(url).catch(() => {
+  async function openLegalLink(url: string, title: string) {
+    try {
+      await Linking.openURL(url);
+    } catch {
       Alert.alert(title, 'Der Link konnte nicht geöffnet werden.');
-    });
+    }
   }
 
   function handleSentryTest() {
@@ -312,13 +306,13 @@ export default function ProfileScreen() {
             <SettingsRow
               icon="shield-checkmark-outline"
               label="Datenschutz"
-              onPress={() => openLegalLink(env.PRIVACY_URL, 'Datenschutz')}
+              onPress={() => void openLegalLink(LINKS.privacy, 'Datenschutz')}
               value="Öffnen"
             />
             <SettingsRow
               icon="document-text-outline"
               label="Impressum"
-              onPress={() => openLegalLink(env.IMPRINT_URL, 'Impressum')}
+              onPress={() => void openLegalLink(LINKS.imprint, 'Impressum')}
               value="Öffnen"
             />
           </SettingsPanel>

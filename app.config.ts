@@ -8,7 +8,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   name: 'Wine Scanner',
   slug: 'wine-scanner',
   scheme: 'winescanner',
-  version: '0.1.0',
+  version: '1.0.0',
   orientation: 'portrait',
   icon: './assets/icon.png',
   userInterfaceStyle: 'automatic',
@@ -24,6 +24,9 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     bundleIdentifier: 'com.francoconsulting.winescanner',
     buildNumber: '1',
     usesAppleSignIn: true,
+    config: {
+      usesNonExemptEncryption: false,
+    },
     infoPlist: {
       NSCameraUsageDescription:
         'Wir benötigen Zugriff auf deine Kamera, um Weinetiketten zu scannen.',
