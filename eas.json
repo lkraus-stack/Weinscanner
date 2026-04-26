@@ -1,38 +1,39 @@
 {
   "cli": {
-    "version": ">= 5.0.0"
+    "version": ">= 5.0.0",
+    "appVersionSource": "remote"
   },
   "build": {
     "development": {
       "developmentClient": true,
       "distribution": "internal",
-      "env": {
-        "SENTRY_ORG": "replace-with-sentry-org",
-        "SENTRY_PROJECT": "wine-scanner"
-      },
       "ios": {
-        "simulator": true
+        "simulator": true,
+        "resourceClass": "m-medium"
       }
     },
     "preview": {
       "distribution": "internal",
-      "env": {
-        "SENTRY_ORG": "replace-with-sentry-org",
-        "SENTRY_PROJECT": "wine-scanner"
-      },
+      "channel": "preview",
       "ios": {
-        "simulator": false
+        "simulator": false,
+        "resourceClass": "m-medium"
       }
     },
     "production": {
       "autoIncrement": true,
-      "env": {
-        "SENTRY_ORG": "replace-with-sentry-org",
-        "SENTRY_PROJECT": "wine-scanner"
+      "channel": "production",
+      "ios": {
+        "resourceClass": "m-medium"
       }
     }
   },
   "submit": {
-    "production": {}
+    "production": {
+      "ios": {
+        "ascAppId": "PLATZHALTER_ASC_APP_ID",
+        "appleTeamId": "PLATZHALTER_APPLE_TEAM_ID"
+      }
+    }
   }
 }

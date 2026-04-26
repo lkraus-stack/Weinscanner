@@ -107,12 +107,11 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     'expo-secure-store',
     'expo-apple-authentication',
     '@react-native-community/datetimepicker',
-    'sentry-expo',
     [
-      '@sentry/react-native',
+      '@sentry/react-native/expo',
       {
-        organization: process.env.SENTRY_ORG,
-        project: process.env.SENTRY_PROJECT,
+        organization: 'franco-consulting',
+        project: 'wine-scanner',
       },
     ],
     [
