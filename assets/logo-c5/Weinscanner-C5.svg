@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <radialGradient id="bg" cx="0.3" cy="0.18" r="0.9">
+      <stop offset="0%" stop-color="#7A2A2E"></stop>
+      <stop offset="40%" stop-color="#5C1A1E"></stop>
+      <stop offset="100%" stop-color="#3A0E12"></stop>
+    </radialGradient>
+    <radialGradient id="berry" cx="0.32" cy="0.3" r="0.75">
+      <stop offset="0%" stop-color="#F2D88B"></stop>
+      <stop offset="55%" stop-color="#D9B574"></stop>
+      <stop offset="100%" stop-color="#7E5E2A"></stop>
+    </radialGradient>
+    <clipPath id="iosmask">
+      <rect x="0" y="0" width="512" height="512" rx="114.5" ry="114.5"></rect>
+    </clipPath>
+  </defs>
+  <g clip-path="url(#iosmask)">
+    <rect x="0" y="0" width="512" height="512" fill="url(#bg)"></rect>
+    
+    <path d="M256 168 C256 150 250 138 244 130" fill="none" stroke="#F4ECDD" stroke-opacity="0.85" stroke-width="6" stroke-linecap="round"></path>
+    
+    <path d="M244 130 C218 110 196 112 180 132 C168 148 172 168 192 178 C214 188 238 178 250 152 C254 144 252 134 244 130 Z" fill="#F4ECDD"></path>
+    <path d="M244 130 C232 144 218 156 200 162" fill="none" stroke="#B8924A" stroke-opacity="0.4" stroke-width="2"></path>
+    
+    <path d="M268 130 C284 122 296 130 296 144 C296 156 286 158 286 148 C286 142 292 142 296 148" fill="none" stroke="#F4ECDD" stroke-opacity="0.85" stroke-width="4" stroke-linecap="round"></path>
+    
+    <g>
+      
+      <g><circle cx="159.7" cy="200" r="26" fill="url(#berry)"></circle><circle cx="152.7" cy="192" r="5" fill="#F8E5A8" fill-opacity="0.7"></circle></g>
+      <g><circle cx="207.85" cy="200" r="26" fill="url(#berry)"></circle><circle cx="200.85" cy="192" r="5" fill="#F8E5A8" fill-opacity="0.7"></circle></g>
+      <g><circle cx="256" cy="200" r="26" fill="url(#berry)"></circle><circle cx="249" cy="192" r="5" fill="#F8E5A8" fill-opacity="0.7"></circle></g>
+      <g><circle cx="304.15" cy="200" r="26" fill="url(#berry)"></circle><circle cx="297.15" cy="192" r="5" fill="#F8E5A8" fill-opacity="0.7"></circle></g>
+      <g><circle cx="352.3" cy="200" r="26" fill="url(#berry)"></circle><circle cx="345.3" cy="192" r="5" fill="#F8E5A8" fill-opacity="0.7"></circle></g>
+      
+      <g><circle cx="183.775" cy="246" r="26" fill="url(#berry)"></circle><circle cx="176.775" cy="238" r="5" fill="#F8E5A8" fill-opacity="0.7"></circle></g>
+      <g><circle cx="231.925" cy="246" r="26" fill="url(#berry)"></circle><circle cx="224.925" cy="238" r="5" fill="#F8E5A8" fill-opacity="0.7"></circle></g>
+      <g><circle cx="280.075" cy="246" r="26" fill="url(#berry)"></circle><circle cx="273.075" cy="238" r="5" fill="#F8E5A8" fill-opacity="0.7"></circle></g>
+      <g><circle cx="328.225" cy="246" r="26" fill="url(#berry)"></circle><circle cx="321.225" cy="238" r="5" fill="#F8E5A8" fill-opacity="0.7"></circle></g>
+      
+      <g><circle cx="207.85" cy="290" r="26" fill="url(#berry)"></circle><circle cx="200.85" cy="282" r="5" fill="#F8E5A8" fill-opacity="0.7"></circle></g>
+      <g><circle cx="256" cy="290" r="26" fill="url(#berry)"></circle><circle cx="249" cy="282" r="5" fill="#F8E5A8" fill-opacity="0.7"></circle></g>
+      <g><circle cx="304.15" cy="290" r="26" fill="url(#berry)"></circle><circle cx="297.15" cy="282" r="5" fill="#F8E5A8" fill-opacity="0.7"></circle></g>
+      
+      <g><circle cx="231.925" cy="334" r="26" fill="url(#berry)"></circle><circle cx="224.925" cy="326" r="5" fill="#F8E5A8" fill-opacity="0.7"></circle></g>
+      <g><circle cx="280.075" cy="334" r="26" fill="url(#berry)"></circle><circle cx="273.075" cy="326" r="5" fill="#F8E5A8" fill-opacity="0.7"></circle></g>
+      
+      <g><circle cx="256" cy="378" r="26" fill="url(#berry)"></circle><circle cx="249" cy="370" r="5" fill="#F8E5A8" fill-opacity="0.7"></circle></g>
+    </g>
+  </g>
+</svg>
