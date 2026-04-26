@@ -2,14 +2,15 @@ import { Tabs } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { TabBarIcon } from '@/components/tab-bar-icon';
-import { colors } from '@/theme/colors';
 import { spacing } from '@/theme/spacing';
+import { useTheme } from '@/theme/ThemeProvider';
 import { typography } from '@/theme/typography';
 
 const TAB_BAR_BASE_HEIGHT = 62;
 
 export default function AppLayout() {
   const insets = useSafeAreaInsets();
+  const { colors } = useTheme();
   const bottomPadding = Math.max(insets.bottom, spacing.sm);
 
   return (

@@ -4,6 +4,7 @@ import {
   DEFAULT_USER_PREFERENCES,
   normalizePreferences,
   updateProfile,
+  type ProfileWithAvatar,
   type UserPreferences,
 } from '@/lib/profile';
 import { useProfile } from '@/hooks/useProfile';
@@ -28,7 +29,15 @@ export function usePreferences() {
 
       return updateProfile({ preferences: nextPreferences });
     },
-    onSuccess: async (_profile, variables) => {
+    onSuccess: async (profile, variables) => {
+      queryClient.setQueryData<ProfileWithAvatar | undefined>(
+        ['profile', profile.id],
+        (currentProfile) =>
+          currentProfile
+            ? { ...currentProfile, ...profile }
+            : { ...profile, avatarSignedUrl: null }
+      );
+
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['profile'] }),
         variables.key === 'hide_empty_inventory'

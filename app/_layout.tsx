@@ -2,6 +2,7 @@ import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import * as Sentry from '@sentry/react-native';
 import * as SplashScreen from 'expo-splash-screen';
+import { StatusBar } from 'expo-status-bar';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
@@ -9,7 +10,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { Toast } from '@/components/toast';
 import { useAuth } from '@/hooks/useAuth';
-import { colors } from '@/theme/colors';
+import { ThemeProvider, useTheme } from '@/theme/ThemeProvider';
 
 const sentryDsn = process.env.EXPO_PUBLIC_SENTRY_DSN;
 
@@ -25,10 +26,27 @@ SplashScreen.preventAutoHideAsync().catch(() => null);
 
 export default function RootLayout() {
   const [queryClient] = useState(() => new QueryClient());
+
+  return (
+    <GestureHandlerRootView style={styles.root}>
+      <QueryClientProvider client={queryClient}>
+        <ThemeProvider>
+          <BottomSheetModalProvider>
+            <ThemedRootContent />
+          </BottomSheetModalProvider>
+        </ThemeProvider>
+      </QueryClientProvider>
+    </GestureHandlerRootView>
+  );
+}
+
+function ThemedRootContent() {
   const { session, isLoading } = useAuth();
+  const { colors, resolved } = useTheme();
   const router = useRouter();
   const segments = useSegments();
   const firstSegment = segments[0];
+  const statusBarStyle = resolved === 'dark' ? 'light' : 'dark';
 
   useEffect(() => {
     if (isLoading) {
@@ -53,30 +71,32 @@ export default function RootLayout() {
 
   if (isLoading) {
     return (
-      <GestureHandlerRootView style={styles.root}>
-        <View style={styles.loadingScreen}>
+      <>
+        <StatusBar style={statusBarStyle} />
+        <View
+          style={[
+            styles.loadingScreen,
+            { backgroundColor: colors.background },
+          ]}
+        >
           <ActivityIndicator color={colors.primary} />
         </View>
-      </GestureHandlerRootView>
+      </>
     );
   }
 
   return (
-    <GestureHandlerRootView style={styles.root}>
-      <QueryClientProvider client={queryClient}>
-        <BottomSheetModalProvider>
-          <Stack screenOptions={{ headerShown: false }} />
-          <Toast />
-        </BottomSheetModalProvider>
-      </QueryClientProvider>
-    </GestureHandlerRootView>
+    <>
+      <StatusBar style={statusBarStyle} />
+      <Stack screenOptions={{ headerShown: false }} />
+      <Toast />
+    </>
   );
 }
 
 const styles = StyleSheet.create({
   loadingScreen: {
     alignItems: 'center',
-    backgroundColor: colors.background,
     flex: 1,
     justifyContent: 'center',
   },

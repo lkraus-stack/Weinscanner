@@ -1,7 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { StyleSheet, View } from 'react-native';
 
-import { colors } from '@/theme/colors';
+import { useTheme } from '@/theme/ThemeProvider';
 
 type TabBarIconProps = {
   name: keyof typeof Ionicons.glyphMap;
@@ -11,9 +11,20 @@ type TabBarIconProps = {
 };
 
 export function TabBarIcon({ name, color, focused, isScan }: TabBarIconProps) {
+  const { colors } = useTheme();
+
   if (isScan) {
     return (
-      <View style={[styles.scanButton, focused && styles.scanButtonFocused]}>
+      <View
+        style={[
+          styles.scanButton,
+          {
+            backgroundColor: colors.primary,
+            shadowColor: colors.primaryDark,
+          },
+          focused && { backgroundColor: colors.primaryDark },
+        ]}
+      >
         <Ionicons name={name} size={27} color={colors.white} />
       </View>
     );
@@ -25,18 +36,13 @@ export function TabBarIcon({ name, color, focused, isScan }: TabBarIconProps) {
 const styles = StyleSheet.create({
   scanButton: {
     alignItems: 'center',
-    backgroundColor: colors.primary,
     borderRadius: 28,
     height: 56,
     justifyContent: 'center',
     marginTop: -22,
-    shadowColor: colors.primaryDark,
     shadowOffset: { height: 6, width: 0 },
     shadowOpacity: 0.22,
     shadowRadius: 10,
     width: 56,
-  },
-  scanButtonFocused: {
-    backgroundColor: colors.primaryDark,
   },
 });
