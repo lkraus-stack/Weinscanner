@@ -55,6 +55,8 @@ Aktualisiere sie wenn neue Konventionen sich etablieren.
 - Tests: scripts/test-*.ts mit npm run test:* Mapping
 - Migrations: YYYYMMDD_NN_description.sql, idempotent
 - Components in src/components/[domain]/[Name].tsx organisiert
+- App-Store-Submission-Doku liegt in docs/app-store-submission/
+- Rechtliche und App-Store-URLs zentral in src/lib/links.ts pflegen
 
 ## Pipeline-Konventionen
 - Scan-Pipeline: Foto → Storage → scan-wine Edge Function
@@ -78,9 +80,10 @@ Aktualisiere sie wenn neue Konventionen sich etablieren.
    findet nichts in User-facing-Strings
 
 ## Aktuelle Sprint-Roadmap
-- Sprint 1-16: COMPLETED
-- Sprint 17: Privacy und App Store Prep (nächster Schritt)
-- Sprint 18-20: TestFlight, Beta, Release
+- Sprint 1-16: ABGESCHLOSSEN
+- Sprint 17: ABGESCHLOSSEN, Privacy und App Store Prep mit finalem Audit
+- Sprint 18: Naechster Schritt, manueller Audit auf Preview Build, Production Build und TestFlight
+- Sprint 19-20: Beta und Release
 
 ## Globale Architektur-Entscheidungen (locked-in)
 - Vantero über OpenAI-SDK mit baseURL=https://api.vantero.chat/v1

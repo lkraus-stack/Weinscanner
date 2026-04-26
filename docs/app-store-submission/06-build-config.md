@@ -22,12 +22,12 @@ Quellen:
 
 ## Submit Profile
 
-`submit.production.ios` ist vorbereitet, enthaelt aber bewusst Platzhalter:
+`submit.production.ios` ist fuer App Store Connect vorbereitet:
 
-- `ascAppId`: `PLATZHALTER_ASC_APP_ID`
-- `appleTeamId`: `PLATZHALTER_APPLE_TEAM_ID`
+- `ascAppId`: `6763864187`
+- `appleTeamId`: `4Q33M4DTL3`
 
-Diese Werte muessen ersetzt werden, sobald die App in App Store Connect angelegt ist.
+Diese Werte sind in `eas.json` eingetragen.
 
 Moegliche Wege:
 
@@ -119,11 +119,6 @@ Submission nach App Store Connect:
 eas submit --platform ios --profile production --latest
 ```
 
-## Offene Platzhalter
+## Offene Punkte
 
-Vor dem finalen Submit muessen ersetzt oder beim Submit angegeben werden:
-
-- `PLATZHALTER_ASC_APP_ID`
-- `PLATZHALTER_APPLE_TEAM_ID`
-
-Ausserdem muss geprueft werden, ob `SENTRY_AUTH_TOKEN`, `EXPO_PUBLIC_SENTRY_DSN`, `EXPO_PUBLIC_SUPABASE_URL` und `EXPO_PUBLIC_SUPABASE_ANON_KEY` in der EAS Production-Umgebung gesetzt sind.
+Vor dem finalen Submit muss geprueft werden, ob `SENTRY_AUTH_TOKEN`, `EXPO_PUBLIC_SENTRY_DSN`, `EXPO_PUBLIC_SUPABASE_URL` und `EXPO_PUBLIC_SUPABASE_ANON_KEY` in der EAS Production-Umgebung gesetzt sind.
