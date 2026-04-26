@@ -78,13 +78,8 @@ Aktualisiere sie wenn neue Konventionen sich etablieren.
    findet nichts in User-facing-Strings
 
 ## Aktuelle Sprint-Roadmap
-- Sprint 1-11: COMPLETED
-- Sprint 12: Bewertungs-Modul (in Arbeit)
-- Sprint 13: Bestands-Modul
-- Sprint 14: Profile und Settings
-- Sprint 15: Performance-Audit
-- Sprint 16: Polish und Animationen
-- Sprint 17: Privacy und App Store Prep
+- Sprint 1-16: COMPLETED
+- Sprint 17: Privacy und App Store Prep (nächster Schritt)
 - Sprint 18-20: TestFlight, Beta, Release
 
 ## Globale Architektur-Entscheidungen (locked-in)
