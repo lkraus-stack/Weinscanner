@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
+import { memo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import type { InventoryListItem } from '@/hooks/useInventory';
@@ -62,7 +63,11 @@ function getNoteExcerpt(value: string | null) {
     : trimmedValue;
 }
 
-export function InventoryItem({ item, onDrink, onMore }: Props) {
+export const InventoryItem = memo(function InventoryItem({
+  item,
+  onDrink,
+  onMore,
+}: Props) {
   const quantity = item.quantity ?? 0;
   const isEmpty = quantity === 0;
   const noteExcerpt = getNoteExcerpt(item.notes);
@@ -171,7 +176,7 @@ export function InventoryItem({ item, onDrink, onMore }: Props) {
       </View>
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   badgeRow: {

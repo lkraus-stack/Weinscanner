@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
+import { memo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import type { HistoryItemRecord, WineColor } from '@/hooks/useHistory';
@@ -33,7 +34,11 @@ function joinMeta(parts: (string | null | undefined)[]) {
   return parts.filter(Boolean).join(', ');
 }
 
-export function HistoryItem({ item, onPress, onRate }: Props) {
+export const HistoryItem = memo(function HistoryItem({
+  item,
+  onPress,
+  onRate,
+}: Props) {
   const regionLine = joinMeta([item.region, item.country]);
   const colorLabel = item.wineColor ? COLOR_LABELS[item.wineColor] : 'Unklar';
   const swatchColor = item.wineColor
@@ -133,7 +138,7 @@ export function HistoryItem({ item, onPress, onRate }: Props) {
       </View>
     </Pressable>
   );
-}
+});
 
 const styles = StyleSheet.create({
   card: {

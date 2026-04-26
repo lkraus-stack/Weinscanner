@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
+import { memo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import type { RatingListItem } from '@/hooks/useRatings';
@@ -50,7 +51,11 @@ function getNoteExcerpt(value: string | null) {
     : trimmedValue;
 }
 
-export function RatingItem({ item, onMore, onPress }: Props) {
+export const RatingItem = memo(function RatingItem({
+  item,
+  onMore,
+  onPress,
+}: Props) {
   const noteExcerpt = getNoteExcerpt(item.notes);
   const stars = item.stars ?? 0;
   const wine = item.vintage?.wine;
@@ -135,7 +140,7 @@ export function RatingItem({ item, onMore, onPress }: Props) {
       </View>
     </Pressable>
   );
-}
+});
 
 const styles = StyleSheet.create({
   card: {
