@@ -5,57 +5,61 @@ import {
 
 import { batchSignedUrls } from '@/lib/storage';
 import { supabase } from '@/lib/supabase';
-import type { Tables } from '@/types/database';
 
 export type InventoryFilters = {
   hideEmptyInventory?: boolean;
   storageLocation?: string;
 };
 
-type InventoryWine = Pick<
-  Tables<'wines'>,
-  'country' | 'id' | 'producer' | 'region' | 'wine_color' | 'wine_name'
->;
+type InventoryWine = {
+  country: string | null;
+  id: string;
+  producer: string;
+  region: string | null;
+  wine_color: string | null;
+  wine_name: string;
+};
 
-type InventoryVintage = Pick<Tables<'vintages'>, 'id' | 'vintage_year'> & {
+type InventoryVintage = {
+  id: string;
+  vintage_year: number;
   wine: InventoryWine | null;
 };
 
-export type InventoryListItem = Pick<
-  Tables<'inventory_items'>,
-  | 'created_at'
-  | 'id'
-  | 'notes'
-  | 'purchase_price'
-  | 'purchased_at'
-  | 'quantity'
-  | 'storage_location'
-  | 'vintage_id'
-> & {
+export type InventoryListItem = {
+  created_at: string;
   imagePath: string | null;
   imageUrl: string | null;
+  id: string;
   latestScanId: string | null;
+  notes: string | null;
+  purchase_price: number | null;
+  purchased_at: string | null;
+  quantity: number | null;
+  storage_location: string | null;
+  vintage_id: string;
   vintage: InventoryVintage | null;
 };
 
-type RawInventoryListItem = Pick<
-  Tables<'inventory_items'>,
-  | 'created_at'
-  | 'id'
-  | 'notes'
-  | 'purchase_price'
-  | 'purchased_at'
-  | 'quantity'
-  | 'storage_location'
-  | 'vintage_id'
-> & {
-  vintage: InventoryVintage | null;
+type InventoryRpcRow = {
+  country: string | null;
+  created_at: string;
+  id: string;
+  image_path: string | null;
+  latest_scan_id: string | null;
+  notes: string | null;
+  producer: string;
+  purchase_price: number | null;
+  purchased_at: string | null;
+  quantity: number | null;
+  region: string | null;
+  storage_location: string | null;
+  vintage_id: string;
+  vintage_year: number;
+  wine_color: string | null;
+  wine_id: string;
+  wine_name: string;
 };
-
-type ScanPhotoRow = Pick<
-  Tables<'scans'>,
-  'id' | 'label_image_url' | 'scanned_at' | 'vintage_id'
->;
 
 type InventoryPage = {
   data: InventoryListItem[];
@@ -64,54 +68,41 @@ type InventoryPage = {
 
 const INVENTORY_PAGE_SIZE = 20;
 
-async function createLatestScanMap(rows: RawInventoryListItem[]) {
-  const vintageIds = [
-    ...new Set(rows.map((row) => row.vintage_id).filter(Boolean)),
-  ];
-
-  if (vintageIds.length === 0) {
-    return new Map<string, ScanPhotoRow>();
-  }
-
-  const { data, error } = await supabase
-    .from('scans')
-    .select('id, vintage_id, label_image_url, scanned_at')
-    .in('vintage_id', vintageIds)
-    .order('scanned_at', { ascending: false });
-
-  if (error || !data) {
-    return new Map<string, ScanPhotoRow>();
-  }
-
-  const scanMap = new Map<string, ScanPhotoRow>();
-
-  for (const scan of data as ScanPhotoRow[]) {
-    if (scan.vintage_id && !scanMap.has(scan.vintage_id)) {
-      scanMap.set(scan.vintage_id, scan);
-    }
-  }
-
-  return scanMap;
-}
-
 async function mapInventoryRows(
-  rows: RawInventoryListItem[]
+  rows: InventoryRpcRow[]
 ): Promise<InventoryListItem[]> {
-  const scanMap = await createLatestScanMap(rows);
-  const imagePaths = [...scanMap.values()]
-    .map((scan) => scan.label_image_url)
+  const imagePaths = rows
+    .map((row) => row.image_path)
     .filter((path): path is string => Boolean(path));
   const signedUrlMap = await batchSignedUrls(imagePaths);
 
   return rows.map((row) => {
-    const scan = scanMap.get(row.vintage_id);
-    const imagePath = scan?.label_image_url ?? null;
+    const imagePath = row.image_path;
 
     return {
-      ...row,
+      created_at: row.created_at,
+      id: row.id,
       imagePath,
       imageUrl: imagePath ? (signedUrlMap[imagePath] ?? null) : null,
-      latestScanId: scan?.id ?? null,
+      latestScanId: row.latest_scan_id,
+      notes: row.notes,
+      purchase_price: row.purchase_price,
+      purchased_at: row.purchased_at,
+      quantity: row.quantity,
+      storage_location: row.storage_location,
+      vintage: {
+        id: row.vintage_id,
+        vintage_year: row.vintage_year,
+        wine: {
+          country: row.country,
+          id: row.wine_id,
+          producer: row.producer,
+          region: row.region,
+          wine_color: row.wine_color,
+          wine_name: row.wine_name,
+        },
+      },
+      vintage_id: row.vintage_id,
     };
   });
 }
@@ -130,52 +121,21 @@ export function useInventory(filters: InventoryFilters) {
     getNextPageParam: (lastPage) => lastPage.nextPage,
     initialPageParam: 0,
     queryFn: async ({ pageParam }) => {
-      const from = pageParam * INVENTORY_PAGE_SIZE;
-      const to = from + INVENTORY_PAGE_SIZE - 1;
-      let query = supabase
-        .from('inventory_items')
-        .select(
-          `
-            id,
-            vintage_id,
-            quantity,
-            storage_location,
-            purchased_at,
-            purchase_price,
-            notes,
-            created_at,
-            vintage:vintages!inner (
-              id,
-              vintage_year,
-              wine:wines!inner (
-                id,
-                producer,
-                wine_name,
-                region,
-                country,
-                wine_color
-              )
-            )
-          `
-        )
-        .order('created_at', { ascending: false })
-        .range(from, to);
-
-      if (storageLocation) {
-        query = query.eq('storage_location', storageLocation);
-      }
-
-      if (hideEmptyInventory) {
-        query = query.gt('quantity', 0);
-      }
-
-      const { data, error } = await query;
+      const { data, error } = await supabase.rpc(
+        'get_user_inventory_with_photos',
+        {
+          hide_empty_inventory: hideEmptyInventory,
+          page_limit: INVENTORY_PAGE_SIZE,
+          page_offset: pageParam * INVENTORY_PAGE_SIZE,
+          storage_location_filter: storageLocation,
+        }
+      );
 
       if (error) {
         throw error;
       }
 
-      const rows = (data ?? []) as RawInventoryListItem[];
+      const rows = (data ?? []) as InventoryRpcRow[];
 
       return {
         data: await mapInventoryRows(rows),

@@ -380,6 +380,39 @@ export type Database = {
           user_id: string
           vintage_id: string
         }
+        SetofOptions: {
+          from: "*"
+          to: "inventory_items"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      get_user_inventory_with_photos: {
+        Args: {
+          hide_empty_inventory?: boolean
+          page_limit?: number
+          page_offset?: number
+          storage_location_filter?: string
+        }
+        Returns: {
+          country: string
+          created_at: string
+          id: string
+          image_path: string
+          latest_scan_id: string
+          notes: string
+          producer: string
+          purchase_price: number
+          purchased_at: string
+          quantity: number
+          region: string
+          storage_location: string
+          vintage_id: string
+          vintage_year: number
+          wine_color: string
+          wine_id: string
+          wine_name: string
+        }[]
       }
       get_user_scan_history: {
         Args: {
@@ -393,8 +426,8 @@ export type Database = {
           grape_variety: string
           label_image_path: string
           producer: string
-          rating_id: string | null
-          rating_stars: number | null
+          rating_id: string
+          rating_stars: number
           region: string
           scan_id: string
           scanned_at: string
@@ -431,8 +464,8 @@ export type Database = {
           distinct_regions: number
           rating_count: number
           scan_count: number
-          top_grape_variety: string | null
-          top_region: string | null
+          top_grape_variety: string
+          top_region: string
           total_bottles: number
         }[]
       }
