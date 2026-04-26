@@ -1,8 +1,9 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
-import { colors } from '@/theme/colors';
 import { radii, spacing } from '@/theme/spacing';
+import { useTheme, type ThemeColors } from '@/theme/ThemeProvider';
 import { typography } from '@/theme/typography';
 
 type ConfidenceLevel = 'high' | 'medium' | 'low';
@@ -33,6 +34,8 @@ function getConfidenceIcon(level: ConfidenceLevel) {
 }
 
 export function ConfidenceBadge({ compact, score }: Props) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const level = getConfidenceLevel(score);
   const icon = getConfidenceIcon(level);
 
@@ -52,7 +55,8 @@ export function ConfidenceBadge({ compact, score }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+function makeStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   badge: {
     alignItems: 'center',
     alignSelf: 'flex-start',
@@ -80,4 +84,5 @@ const styles = StyleSheet.create({
   mediumBadge: {
     backgroundColor: colors.warning,
   },
-});
+  });
+}

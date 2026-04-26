@@ -51,8 +51,8 @@ import {
 } from '@/lib/ratings';
 import { supabase } from '@/lib/supabase';
 import { useToastStore } from '@/stores/toast-store';
-import { colors } from '@/theme/colors';
 import { radii, spacing } from '@/theme/spacing';
+import { useTheme, type ThemeColors } from '@/theme/ThemeProvider';
 import { typography } from '@/theme/typography';
 
 type InfoItem = {
@@ -319,9 +319,17 @@ async function deleteScan(detail: ScanDetail) {
   }
 }
 
+function useWineDetailStyles() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
+
+  return { colors, styles };
+}
+
 export default function WineDetailScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { styles } = useWineDetailStyles();
   const params = useLocalSearchParams<{ scanId?: string }>();
   const scanId = normalizeParam(params.scanId);
   const scanDetailQuery = useScanDetail(scanId);
@@ -380,6 +388,8 @@ function DetailHeader({
   insetTop: number;
   onBack: () => void;
 }) {
+  const { colors, styles } = useWineDetailStyles();
+
   return (
     <View style={[styles.header, { paddingTop: insetTop + spacing.sm }]}>
       <Pressable
@@ -410,6 +420,7 @@ function WineDetailContent({
   detail: ScanDetail;
   paddingBottom: number;
 }) {
+  const { colors, styles } = useWineDetailStyles();
   const queryClient = useQueryClient();
   const router = useRouter();
   const showToast = useToastStore((state) => state.showToast);
@@ -870,6 +881,7 @@ function WineDetailContent({
 }
 
 function RatingSummary({ rating }: { rating: ScanDetailRating }) {
+  const { colors, styles } = useWineDetailStyles();
   const stars = typeof rating.stars === 'number' ? rating.stars : 0;
   const drankAt = formatDate(rating.drank_at);
   const meta = [rating.occasion, drankAt].filter(Boolean).join(' · ');
@@ -904,6 +916,8 @@ function RecommendationRow({
   label: string;
   value: string;
 }) {
+  const { colors, styles } = useWineDetailStyles();
+
   return (
     <View style={styles.recommendationRow}>
       <View style={styles.recommendationIcon}>
@@ -928,6 +942,8 @@ function DetailActions({
   onInventory: () => void;
   onRate: () => void;
 }) {
+  const { colors, styles } = useWineDetailStyles();
+
   return (
     <View style={styles.actions}>
       <View style={styles.actionButtons}>
@@ -1024,6 +1040,7 @@ function InventoryDuplicateModal({
   pendingValue: InventoryFormValue | null;
   visible: boolean;
 }) {
+  const { styles } = useWineDetailStyles();
   const preferredMatch = pendingValue
     ? findPreferredInventoryMatch(matches, pendingValue)
     : null;
@@ -1101,6 +1118,7 @@ function VintageReassignModal({
   value: number | null;
   visible: boolean;
 }) {
+  const { colors, styles } = useWineDetailStyles();
   const saveDisabled = !value || value === currentVintageYear || isSaving;
 
   return (
@@ -1188,6 +1206,7 @@ function ModalOption({
   label: string;
   onPress: () => void;
 }) {
+  const { colors, styles } = useWineDetailStyles();
   const color = destructive ? colors.error : colors.primaryDark;
 
   return (
@@ -1223,6 +1242,8 @@ function Section({
   children: React.ReactNode;
   title: string;
 }) {
+  const { styles } = useWineDetailStyles();
+
   return (
     <View style={styles.section}>
       <View style={styles.sectionHeader}>
@@ -1235,6 +1256,8 @@ function Section({
 }
 
 function InfoGrid({ items }: { items: InfoItem[] }) {
+  const { styles } = useWineDetailStyles();
+
   return (
     <View style={styles.infoGrid}>
       {items.map((item) => (
@@ -1260,6 +1283,8 @@ function CenterState({
   onPress?: () => void;
   title: string;
 }) {
+  const { colors, styles } = useWineDetailStyles();
+
   return (
     <View style={styles.centerState}>
       <View style={styles.centerIconShell}>
@@ -1278,7 +1303,8 @@ function CenterState({
   );
 }
 
-const styles = StyleSheet.create({
+function makeStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   actionButton: {
     alignItems: 'center',
     backgroundColor: colors.primary,
@@ -1716,4 +1742,5 @@ const styles = StyleSheet.create({
   vintageSheet: {
     height: '88%',
   },
-});
+  });
+}

@@ -1,8 +1,9 @@
+import { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { getAromaIcon } from '@/lib/aroma-icons';
-import { colors } from '@/theme/colors';
 import { radii, spacing } from '@/theme/spacing';
+import { useTheme, type ThemeColors } from '@/theme/ThemeProvider';
 import { typography } from '@/theme/typography';
 
 type Props = {
@@ -10,6 +11,9 @@ type Props = {
 };
 
 export function AromaGrid({ aromas }: Props) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
+
   if (aromas.length === 0) {
     return null;
   }
@@ -28,7 +32,8 @@ export function AromaGrid({ aromas }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+function makeStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   card: {
     alignItems: 'center',
     backgroundColor: colors.surface,
@@ -62,4 +67,5 @@ const styles = StyleSheet.create({
     lineHeight: typography.lineHeight.sm,
     textAlign: 'center',
   },
-});
+  });
+}

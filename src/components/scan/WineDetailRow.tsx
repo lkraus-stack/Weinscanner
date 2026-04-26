@@ -1,7 +1,8 @@
+import { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
-import { colors } from '@/theme/colors';
 import { spacing } from '@/theme/spacing';
+import { useTheme, type ThemeColors } from '@/theme/ThemeProvider';
 import { typography } from '@/theme/typography';
 
 import { ConfidenceBadge } from './ConfidenceBadge';
@@ -13,6 +14,9 @@ type Props = {
 };
 
 export function WineDetailRow({ confidence, label, value }: Props) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
+
   return (
     <View style={styles.row}>
       <View style={styles.rowText}>
@@ -26,7 +30,8 @@ export function WineDetailRow({ confidence, label, value }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+function makeStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   row: {
     alignItems: 'center',
     borderBottomColor: colors.border,
@@ -51,4 +56,5 @@ const styles = StyleSheet.create({
     fontWeight: typography.weight.bold,
     lineHeight: typography.lineHeight.base,
   },
-});
+  });
+}

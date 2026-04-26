@@ -1,7 +1,8 @@
+import { useMemo } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 
-import { colors } from '@/theme/colors';
 import { radii, spacing } from '@/theme/spacing';
+import { useTheme, type ThemeColors } from '@/theme/ThemeProvider';
 
 import { SkeletonBox } from './SkeletonBox';
 
@@ -10,6 +11,9 @@ type Props = {
 };
 
 export function WineDetailSkeleton({ paddingBottom }: Props) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
+
   return (
     <ScrollView
       contentContainerStyle={[styles.content, { paddingBottom }]}
@@ -67,7 +71,8 @@ export function WineDetailSkeleton({ paddingBottom }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+function makeStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   content: {
     gap: spacing.xxl,
     paddingHorizontal: spacing.screenX,
@@ -113,4 +118,5 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     padding: spacing.lg,
   },
-});
+  });
+}
