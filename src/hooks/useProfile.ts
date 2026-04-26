@@ -10,6 +10,6 @@ export function useProfile() {
     enabled: Boolean(user?.id),
     queryFn: getProfile,
     queryKey: ['profile', user?.id],
-    staleTime: 60_000,
+    staleTime: 300_000,
   });
 }
