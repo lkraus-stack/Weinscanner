@@ -97,6 +97,7 @@ export default function ProfileScreen() {
   const [isThemeModalVisible, setIsThemeModalVisible] = useState(false);
   const [isExportModalVisible, setIsExportModalVisible] = useState(false);
   const [isDeleteModalVisible, setIsDeleteModalVisible] = useState(false);
+  const [shouldThrowTestError, setShouldThrowTestError] = useState(false);
   const email = user?.email ?? 'unbekannte E-Mail';
   const profile = profileQuery.data;
   const preferences = useMemo(
@@ -218,6 +219,10 @@ export default function ProfileScreen() {
   }
 
   const isLoading = profileQuery.isLoading || statsQuery.isLoading;
+
+  if (__DEV__ && shouldThrowTestError) {
+    throw new Error('ErrorBoundary Test');
+  }
 
   return (
     <SafeAreaView edges={['top']} style={styles.screen}>
@@ -343,19 +348,38 @@ export default function ProfileScreen() {
         </View>
 
         {__DEV__ ? (
-          <Pressable
-            accessibilityRole="button"
-            onPress={handleSentryTest}
-            style={({ pressed }) => [
-              styles.sentryButton,
-              pressed && styles.pressed,
-            ]}
-          >
-            <Ionicons name="bug-outline" size={18} color={colors.primaryDark} />
-            <Text style={styles.sentryButtonText}>
-              Sentry Test-Fehler senden
-            </Text>
-          </Pressable>
+          <View style={styles.devActions}>
+            <Pressable
+              accessibilityRole="button"
+              onPress={handleSentryTest}
+              style={({ pressed }) => [
+                styles.sentryButton,
+                pressed && styles.pressed,
+              ]}
+            >
+              <Ionicons name="bug-outline" size={18} color={colors.primaryDark} />
+              <Text style={styles.sentryButtonText}>
+                Sentry Test-Fehler senden
+              </Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => setShouldThrowTestError(true)}
+              style={({ pressed }) => [
+                styles.sentryButton,
+                pressed && styles.pressed,
+              ]}
+            >
+              <Ionicons
+                name="warning-outline"
+                size={18}
+                color={colors.primaryDark}
+              />
+              <Text style={styles.sentryButtonText}>
+                ErrorBoundary testen
+              </Text>
+            </Pressable>
+          </View>
         ) : null}
       </ScrollView>
 
@@ -738,9 +762,13 @@ function makeStyles(colors: ThemeColors) {
     paddingHorizontal: spacing.screenX,
     paddingTop: spacing.lg,
   },
-  disabled: {
-    opacity: 0.55,
-  },
+    disabled: {
+      opacity: 0.55,
+    },
+    devActions: {
+      alignItems: 'center',
+      gap: spacing.sm,
+    },
   editButton: {
     alignItems: 'center',
     backgroundColor: colors.surfaceWarm,

@@ -1,3 +1,4 @@
+import { assertOnline } from '@/lib/network';
 import { supabase } from '@/lib/supabase';
 
 function normalizeEmail(value: string) {
@@ -35,6 +36,8 @@ async function getFunctionErrorMessage(error: unknown): Promise<string> {
 }
 
 export async function deleteAccount(confirmEmail: string): Promise<void> {
+  await assertOnline();
+
   const {
     data: { user },
     error: userError,

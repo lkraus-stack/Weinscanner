@@ -1,3 +1,4 @@
+import { assertOnline } from '@/lib/network';
 import { supabase } from '@/lib/supabase';
 import type {
   SaveScanPayload,
@@ -100,6 +101,8 @@ async function invokeAnalysisFunction<T>(
   let lastMessage = 'Etikett konnte nicht analysiert werden.';
 
   for (let attempt = 0; attempt < 4; attempt += 1) {
+    await assertOnline();
+
     const { data, error } = await supabase.functions.invoke<
       EdgeFunctionResponse<T>
     >(functionName, { body });
@@ -146,6 +149,8 @@ export async function scanWineFromLabel(
 export async function saveScan(
   payload: SaveScanPayload
 ): Promise<SaveScanResult> {
+  await assertOnline();
+
   const { data, error } = await supabase.functions.invoke<
     EdgeFunctionResponse<SaveScanResult>
   >('save-scan', {
