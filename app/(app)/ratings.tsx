@@ -1,4 +1,3 @@
-import Ionicons from '@expo/vector-icons/Ionicons';
 import { FlashList, type ListRenderItemInfo } from '@shopify/flash-list';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import * as Haptics from 'expo-haptics';
@@ -7,7 +6,6 @@ import { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  Modal,
   Pressable,
   RefreshControl,
   StyleSheet,
@@ -24,6 +22,7 @@ import {
   type RatingFormValue,
 } from '@/components/ratings/RatingModal';
 import { RatingItemSkeleton } from '@/components/skeletons/RatingItemSkeleton';
+import { BottomSheet, SheetOption } from '@/components/ui/BottomSheet';
 import {
   type RatingListItem,
   type RatingsFilters,
@@ -391,92 +390,22 @@ function RatingActionsModal({
   visible: boolean;
 }) {
   return (
-    <Modal
-      animationType="fade"
-      onRequestClose={onCancel}
-      transparent
+    <BottomSheet
+      description="Passe deine Notiz an oder lösche diese Bewertung."
+      onClose={onCancel}
+      title="Bewertung"
       visible={visible}
     >
-      <View style={styles.modalRoot}>
-        <Pressable
-          accessibilityLabel="Bewertungsaktionen schließen"
-          onPress={onCancel}
-          style={styles.modalBackdrop}
-        />
-        <View style={styles.bottomSheet}>
-          <View style={styles.modalHandle} />
-          <Text style={styles.modalTitle}>Bewertung</Text>
-          <Text style={styles.modalDescription}>
-            Passe deine Notiz an oder lösche diese Bewertung.
-          </Text>
-
-          <View style={styles.modalOptions}>
-            <ModalOption
-              icon="create-outline"
-              label="Bearbeiten"
-              onPress={onEdit}
-            />
-            <ModalOption
-              destructive
-              icon="trash-outline"
-              isBusy={isDeleting}
-              label="Löschen"
-              onPress={onDelete}
-            />
-          </View>
-
-          <Pressable
-            accessibilityRole="button"
-            onPress={onCancel}
-            style={styles.cancelButton}
-          >
-            <Text style={styles.cancelButtonText}>Abbrechen</Text>
-          </Pressable>
-        </View>
-      </View>
-    </Modal>
-  );
-}
-
-function ModalOption({
-  destructive,
-  icon,
-  isBusy,
-  label,
-  onPress,
-}: {
-  destructive?: boolean;
-  icon: keyof typeof Ionicons.glyphMap;
-  isBusy?: boolean;
-  label: string;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      disabled={isBusy}
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.modalOption,
-        pressed && styles.pressed,
-        isBusy && styles.disabled,
-      ]}
-    >
-      <Ionicons
-        color={destructive ? colors.error : colors.primaryDark}
-        name={icon}
-        size={22}
+      <SheetOption icon="create-outline" label="Bearbeiten" onPress={onEdit} />
+      <SheetOption
+        destructive
+        icon="trash-outline"
+        isBusy={isDeleting}
+        label="Löschen"
+        onPress={onDelete}
       />
-      <Text
-        style={[
-          styles.modalOptionText,
-          destructive && styles.modalOptionTextDestructive,
-        ]}
-      >
-        {label}
-      </Text>
-      {isBusy ? <ActivityIndicator color={colors.error} /> : null}
-    </Pressable>
+      <SheetOption icon="close-outline" label="Abbrechen" onPress={onCancel} />
+    </BottomSheet>
   );
 }
 

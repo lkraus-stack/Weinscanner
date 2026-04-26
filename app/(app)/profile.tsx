@@ -10,7 +10,6 @@ import {
   ActivityIndicator,
   Alert,
   Linking,
-  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -25,6 +24,7 @@ import {
   EditProfileModal,
   type EditProfileValue,
 } from '@/components/profile/EditProfileModal';
+import { BottomSheet, SheetOption } from '@/components/ui/BottomSheet';
 import { usePreferences } from '@/hooks/usePreferences';
 import { useProfile } from '@/hooks/useProfile';
 import { useUserStats, type UserStats } from '@/hooks/useUserStats';
@@ -614,22 +614,25 @@ function ThemeModal({
   visible: boolean;
 }) {
   return (
-    <BottomSheetModal
+    <BottomSheet
       description="Die Auswahl wird gespeichert. Dunkel wird später auf die ganze App angewendet."
-      onCancel={onCancel}
+      onClose={onCancel}
       title="Erscheinungsbild"
       visible={visible}
     >
       {THEME_OPTIONS.map((option) => (
-        <ModalOption
+        <SheetOption
+          disabled={isSaving}
           key={option.value}
           icon={currentTheme === option.value ? 'checkmark-circle' : 'ellipse-outline'}
           isBusy={isSaving && currentTheme !== option.value}
           label={option.label}
           onPress={() => onSelect(option.value)}
+          selected={currentTheme === option.value}
         />
       ))}
-    </BottomSheetModal>
+      <SheetOption icon="close-outline" label="Abbrechen" onPress={onCancel} />
+    </BottomSheet>
   );
 }
 
@@ -645,98 +648,26 @@ function ExportModal({
   visible: boolean;
 }) {
   return (
-    <BottomSheetModal
+    <BottomSheet
       description="Der Export enthält deine Profil-, Scan-, Bewertungs-, Bestands- und Korrekturdaten."
-      onCancel={onCancel}
+      onClose={onCancel}
       title="Daten exportieren"
       visible={visible}
     >
-      <ModalOption
+      <SheetOption
         icon="document-text-outline"
         isBusy={isExporting}
         label="Als CSV exportieren"
         onPress={() => onSelect('csv')}
       />
-      <ModalOption
+      <SheetOption
         icon="code-slash-outline"
         isBusy={isExporting}
         label="Als JSON exportieren"
         onPress={() => onSelect('json')}
       />
-    </BottomSheetModal>
-  );
-}
-
-function BottomSheetModal({
-  children,
-  description,
-  onCancel,
-  title,
-  visible,
-}: {
-  children: React.ReactNode;
-  description: string;
-  onCancel: () => void;
-  title: string;
-  visible: boolean;
-}) {
-  return (
-    <Modal
-      animationType="fade"
-      onRequestClose={onCancel}
-      transparent
-      visible={visible}
-    >
-      <View style={styles.modalRoot}>
-        <Pressable
-          accessibilityLabel={`${title} schließen`}
-          onPress={onCancel}
-          style={styles.modalBackdrop}
-        />
-        <View style={styles.bottomSheet}>
-          <View style={styles.modalHandle} />
-          <Text style={styles.modalTitle}>{title}</Text>
-          <Text style={styles.modalDescription}>{description}</Text>
-          <View style={styles.modalOptions}>{children}</View>
-          <Pressable
-            accessibilityRole="button"
-            onPress={onCancel}
-            style={styles.cancelButton}
-          >
-            <Text style={styles.cancelButtonText}>Abbrechen</Text>
-          </Pressable>
-        </View>
-      </View>
-    </Modal>
-  );
-}
-
-function ModalOption({
-  icon,
-  isBusy,
-  label,
-  onPress,
-}: {
-  icon: keyof typeof Ionicons.glyphMap;
-  isBusy?: boolean;
-  label: string;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      disabled={isBusy}
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.modalOption,
-        pressed && styles.pressed,
-        isBusy && styles.disabled,
-      ]}
-    >
-      <Ionicons name={icon} size={22} color={colors.primaryDark} />
-      <Text style={styles.modalOptionText}>{label}</Text>
-      {isBusy ? <ActivityIndicator color={colors.primary} /> : null}
-    </Pressable>
+      <SheetOption icon="close-outline" label="Abbrechen" onPress={onCancel} />
+    </BottomSheet>
   );
 }
 

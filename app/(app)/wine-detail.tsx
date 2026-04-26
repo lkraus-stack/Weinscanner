@@ -28,6 +28,7 @@ import {
 } from '@/components/ratings/RatingModal';
 import { VintageYearPicker } from '@/components/scan/VintageYearPicker';
 import { WineDetailSkeleton } from '@/components/skeletons/WineDetailSkeleton';
+import { BottomSheet, SheetOption } from '@/components/ui/BottomSheet';
 import { AromaGrid } from '@/components/wine-detail/AromaGrid';
 import {
   type ScanDetail,
@@ -697,6 +698,11 @@ function WineDetailContent({
     );
   }
 
+  function reidentifyWine() {
+    setIsCorrectionModalVisible(false);
+    router.push('/(app)/scan');
+  }
+
   function saveVintageReassignment() {
     if (!selectedVintageYear) {
       return;
@@ -831,6 +837,7 @@ function WineDetailContent({
         onCancel={() => setIsCorrectionModalVisible(false)}
         onDelete={confirmDeleteScan}
         onOpenVintage={openVintageModal}
+        onReidentify={reidentifyWine}
         visible={isCorrectionModalVisible}
       />
 
@@ -960,55 +967,42 @@ function CorrectionModal({
   onCancel,
   onDelete,
   onOpenVintage,
+  onReidentify,
   visible,
 }: {
   isDeleting: boolean;
   onCancel: () => void;
   onDelete: () => void;
   onOpenVintage: () => void;
+  onReidentify: () => void;
   visible: boolean;
 }) {
   return (
-    <Modal
-      animationType="fade"
-      onRequestClose={onCancel}
-      transparent
+    <BottomSheet
+      description="Wähle, was an diesem Scan angepasst werden soll."
+      onClose={onCancel}
+      title="Fehler korrigieren"
       visible={visible}
     >
-      <View style={styles.modalRoot}>
-        <Pressable
-          accessibilityLabel="Fehler korrigieren schließen"
-          onPress={onCancel}
-          style={styles.modalBackdrop}
-        />
-        <View style={styles.bottomSheet}>
-          <View style={styles.modalHandle} />
-          <Text style={styles.modalTitle}>Fehler korrigieren</Text>
-          <Text style={styles.modalDescription}>
-            Wähle, was an diesem Scan angepasst werden soll.
-          </Text>
-
-          <View style={styles.modalOptions}>
-            <ModalOption
-              icon="calendar-outline"
-              label="Anderen Jahrgang zuweisen"
-              onPress={onOpenVintage}
-            />
-            <ModalOption
-              destructive
-              icon="trash-outline"
-              isBusy={isDeleting}
-              label="Scan löschen"
-              onPress={onDelete}
-            />
-          </View>
-
-          <Pressable onPress={onCancel} style={styles.modalCancelButton}>
-            <Text style={styles.modalCancelText}>Abbrechen</Text>
-          </Pressable>
-        </View>
-      </View>
-    </Modal>
+      <SheetOption
+        icon="calendar-outline"
+        label="Anderen Jahrgang zuweisen"
+        onPress={onOpenVintage}
+      />
+      <SheetOption
+        icon="scan-outline"
+        label="Wein neu identifizieren"
+        onPress={onReidentify}
+      />
+      <SheetOption
+        destructive
+        icon="trash-outline"
+        isBusy={isDeleting}
+        label="Scan löschen"
+        onPress={onDelete}
+      />
+      <SheetOption icon="close-outline" label="Abbrechen" onPress={onCancel} />
+    </BottomSheet>
   );
 }
 

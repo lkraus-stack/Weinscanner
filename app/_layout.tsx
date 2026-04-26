@@ -1,9 +1,11 @@
+import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import * as Sentry from '@sentry/react-native';
 import * as SplashScreen from 'expo-splash-screen';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { Toast } from '@/components/toast';
 import { useAuth } from '@/hooks/useAuth';
@@ -51,17 +53,23 @@ export default function RootLayout() {
 
   if (isLoading) {
     return (
-      <View style={styles.loadingScreen}>
-        <ActivityIndicator color={colors.primary} />
-      </View>
+      <GestureHandlerRootView style={styles.root}>
+        <View style={styles.loadingScreen}>
+          <ActivityIndicator color={colors.primary} />
+        </View>
+      </GestureHandlerRootView>
     );
   }
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <Stack screenOptions={{ headerShown: false }} />
-      <Toast />
-    </QueryClientProvider>
+    <GestureHandlerRootView style={styles.root}>
+      <QueryClientProvider client={queryClient}>
+        <BottomSheetModalProvider>
+          <Stack screenOptions={{ headerShown: false }} />
+          <Toast />
+        </BottomSheetModalProvider>
+      </QueryClientProvider>
+    </GestureHandlerRootView>
   );
 }
 
@@ -71,5 +79,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
     flex: 1,
     justifyContent: 'center',
+  },
+  root: {
+    flex: 1,
   },
 });
