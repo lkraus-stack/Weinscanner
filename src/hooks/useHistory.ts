@@ -3,6 +3,7 @@ import {
   useInfiniteQuery,
 } from '@tanstack/react-query';
 
+import { batchSignedUrls } from '@/lib/storage';
 import { supabase } from '@/lib/supabase';
 
 export type WineColor = 'weiss' | 'rot' | 'rose' | 'schaum' | 'suess';
@@ -79,38 +80,19 @@ async function createSignedUrlMap(rows: HistoryRpcRow[]) {
     .map((row) => row.label_image_path)
     .filter((path): path is string => Boolean(path));
 
-  if (paths.length === 0) {
-    return new Map<string, string>();
-  }
-
-  const uniquePaths = [...new Set(paths)];
-  const { data, error } = await supabase.storage
-    .from('wine-labels')
-    .createSignedUrls(uniquePaths, 3600);
-
-  if (error || !data) {
-    return new Map<string, string>();
-  }
-
-  return data.reduce<Map<string, string>>((map, item) => {
-    if (item.path && item.signedUrl) {
-      map.set(item.path, item.signedUrl);
-    }
-
-    return map;
-  }, new Map());
+  return batchSignedUrls(paths);
 }
 
 function mapHistoryRow(
   row: HistoryRpcRow,
-  signedUrlMap: Map<string, string>
+  signedUrlMap: Record<string, string>
 ): HistoryItemRecord {
   return {
     country: row.country,
     grapeVariety: row.grape_variety,
     labelImagePath: row.label_image_path,
     labelImageUrl: row.label_image_path
-      ? (signedUrlMap.get(row.label_image_path) ?? null)
+      ? (signedUrlMap[row.label_image_path] ?? null)
       : null,
     producer: row.producer,
     ratingId: row.rating_id,

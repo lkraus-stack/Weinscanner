@@ -3,6 +3,7 @@ import {
   useInfiniteQuery,
 } from '@tanstack/react-query';
 
+import { batchSignedUrls } from '@/lib/storage';
 import { supabase } from '@/lib/supabase';
 import type { Tables } from '@/types/database';
 
@@ -63,40 +64,6 @@ type InventoryPage = {
 
 const INVENTORY_PAGE_SIZE = 20;
 
-function isRemoteUrl(value: string) {
-  return value.startsWith('http://') || value.startsWith('https://');
-}
-
-async function createSignedUrlMap(paths: string[]) {
-  const signedUrlMap = new Map<string, string>();
-
-  for (const remoteUrl of paths.filter(isRemoteUrl)) {
-    signedUrlMap.set(remoteUrl, remoteUrl);
-  }
-
-  const storagePaths = [...new Set(paths.filter((path) => !isRemoteUrl(path)))];
-
-  if (storagePaths.length === 0) {
-    return signedUrlMap;
-  }
-
-  const { data, error } = await supabase.storage
-    .from('wine-labels')
-    .createSignedUrls(storagePaths, 3600);
-
-  if (error || !data) {
-    return signedUrlMap;
-  }
-
-  for (const item of data) {
-    if (item.path && item.signedUrl) {
-      signedUrlMap.set(item.path, item.signedUrl);
-    }
-  }
-
-  return signedUrlMap;
-}
-
 async function createLatestScanMap(rows: RawInventoryListItem[]) {
   const vintageIds = [
     ...new Set(rows.map((row) => row.vintage_id).filter(Boolean)),
@@ -134,7 +101,7 @@ async function mapInventoryRows(
   const imagePaths = [...scanMap.values()]
     .map((scan) => scan.label_image_url)
     .filter((path): path is string => Boolean(path));
-  const signedUrlMap = await createSignedUrlMap(imagePaths);
+  const signedUrlMap = await batchSignedUrls(imagePaths);
 
   return rows.map((row) => {
     const scan = scanMap.get(row.vintage_id);
@@ -143,7 +110,7 @@ async function mapInventoryRows(
     return {
       ...row,
       imagePath,
-      imageUrl: imagePath ? (signedUrlMap.get(imagePath) ?? null) : null,
+      imageUrl: imagePath ? (signedUrlMap[imagePath] ?? null) : null,
       latestScanId: scan?.id ?? null,
     };
   });

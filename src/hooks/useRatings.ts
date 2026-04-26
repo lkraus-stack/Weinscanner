@@ -3,6 +3,7 @@ import {
   useInfiniteQuery,
 } from '@tanstack/react-query';
 
+import { batchSignedUrls } from '@/lib/storage';
 import { supabase } from '@/lib/supabase';
 import type { Tables } from '@/types/database';
 
@@ -47,46 +48,17 @@ type RatingsPage = {
 
 const RATINGS_PAGE_SIZE = 20;
 
-function isRemoteUrl(value: string) {
-  return value.startsWith('http://') || value.startsWith('https://');
-}
-
 async function createSignedUrlMap(rows: RawRatingListItem[]) {
   const paths = rows
     .map((row) => row.scan?.label_image_url)
     .filter((path): path is string => Boolean(path));
-  const signedUrlMap = new Map<string, string>();
 
-  for (const remoteUrl of paths.filter(isRemoteUrl)) {
-    signedUrlMap.set(remoteUrl, remoteUrl);
-  }
-
-  const storagePaths = [...new Set(paths.filter((path) => !isRemoteUrl(path)))];
-
-  if (storagePaths.length === 0) {
-    return signedUrlMap;
-  }
-
-  const { data, error } = await supabase.storage
-    .from('wine-labels')
-    .createSignedUrls(storagePaths, 3600);
-
-  if (error || !data) {
-    return signedUrlMap;
-  }
-
-  for (const item of data) {
-    if (item.path && item.signedUrl) {
-      signedUrlMap.set(item.path, item.signedUrl);
-    }
-  }
-
-  return signedUrlMap;
+  return batchSignedUrls(paths);
 }
 
 function mapRatingListItem(
   item: RawRatingListItem,
-  signedUrlMap: Map<string, string>
+  signedUrlMap: Record<string, string>
 ): RatingListItem {
   return {
     ...item,
@@ -94,7 +66,7 @@ function mapRatingListItem(
       ? {
           ...item.scan,
           signed_url: item.scan.label_image_url
-            ? (signedUrlMap.get(item.scan.label_image_url) ?? null)
+            ? (signedUrlMap[item.scan.label_image_url] ?? null)
             : null,
         }
       : null,

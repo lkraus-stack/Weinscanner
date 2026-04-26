@@ -12,10 +12,50 @@ type StorageClient = Pick<SupabaseClient, 'storage'>;
 const UPLOAD_ERROR_MESSAGE =
   'Foto konnte nicht hochgeladen werden. Bitte erneut versuchen.';
 
+function isRemoteUrl(value: string) {
+  return value.startsWith('http://') || value.startsWith('https://');
+}
+
 async function getAppSupabaseClient(): Promise<SupabaseClient> {
   const { supabase } = await import('@/lib/supabase');
 
   return supabase;
+}
+
+export async function batchSignedUrls(
+  paths: string[],
+  expiresIn = 3600,
+  client?: StorageClient
+): Promise<Record<string, string>> {
+  const signedUrls: Record<string, string> = {};
+  const uniquePaths = [...new Set(paths.filter(Boolean))];
+
+  for (const remoteUrl of uniquePaths.filter(isRemoteUrl)) {
+    signedUrls[remoteUrl] = remoteUrl;
+  }
+
+  const storagePaths = uniquePaths.filter((path) => !isRemoteUrl(path));
+
+  if (storagePaths.length === 0) {
+    return signedUrls;
+  }
+
+  const storageClient = client ?? (await getAppSupabaseClient());
+  const { data, error } = await storageClient.storage
+    .from('wine-labels')
+    .createSignedUrls(storagePaths, expiresIn);
+
+  if (error || !data) {
+    return signedUrls;
+  }
+
+  for (const item of data) {
+    if (item.path && item.signedUrl) {
+      signedUrls[item.path] = item.signedUrl;
+    }
+  }
+
+  return signedUrls;
 }
 
 export async function uploadBuffer(
