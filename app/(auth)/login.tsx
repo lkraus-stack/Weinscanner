@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -11,13 +11,14 @@ import {
 import { AppleSignInButton } from '@/components/auth/AppleSignInButton';
 import { EmailOtpForm } from '@/components/auth/EmailOtpForm';
 import { EmailPasswordForm } from '@/components/auth/EmailPasswordForm';
-import { colors } from '@/theme/colors';
+import { useTheme, type ThemeColors } from '@/theme/ThemeProvider';
 import { radii, spacing } from '@/theme/spacing';
 import { typography } from '@/theme/typography';
 
 type LoginMode = 'password' | 'code';
 
 export default function LoginScreen() {
+  const { styles } = useLoginStyles();
   const [loginMode, setLoginMode] = useState<LoginMode>('password');
 
   return (
@@ -84,7 +85,15 @@ export default function LoginScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function useLoginStyles() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
+
+  return { colors, styles };
+}
+
+function makeStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   screen: {
     backgroundColor: colors.background,
     flex: 1,
@@ -160,4 +169,5 @@ const styles = StyleSheet.create({
   segmentTextActive: {
     color: colors.white,
   },
-});
+  });
+}

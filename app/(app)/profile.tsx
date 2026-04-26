@@ -40,7 +40,7 @@ import {
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/auth-store';
 import { useToastStore } from '@/stores/toast-store';
-import { colors } from '@/theme/colors';
+import { useTheme, type ThemeColors } from '@/theme/ThemeProvider';
 import { radii, spacing } from '@/theme/spacing';
 import { typography } from '@/theme/typography';
 
@@ -85,6 +85,7 @@ function formatTheme(value: ThemePreference) {
 }
 
 export default function ProfileScreen() {
+  const { colors, styles } = useProfileStyles();
   const router = useRouter();
   const queryClient = useQueryClient();
   const user = useAuthStore((state) => state.user);
@@ -253,11 +254,6 @@ export default function ProfileScreen() {
               onPress={() => setIsThemeModalVisible(true)}
               value={formatTheme(preferences.theme)}
             />
-            <View style={styles.hintRow}>
-              <Text style={styles.hintText}>
-                Dark Mode kommt mit der nächsten Version.
-              </Text>
-            </View>
             <SettingsRow
               icon="cube-outline"
               label="Leere Bestände ausblenden"
@@ -419,6 +415,8 @@ function ProfileHeader({
   isLoading: boolean;
   onEdit: () => void;
 }) {
+  const { colors, styles } = useProfileStyles();
+
   return (
     <View style={styles.profileHeader}>
       <View style={styles.avatarFrame}>
@@ -468,6 +466,8 @@ function UserStatsCard({
   isLoading: boolean;
   stats?: UserStats;
 }) {
+  const { colors, styles } = useProfileStyles();
+
   if (isLoading) {
     return (
       <View style={styles.statsCard}>
@@ -496,6 +496,8 @@ function UserStatsCard({
 }
 
 function StatCell({ label, value }: { label: string; value: string }) {
+  const { styles } = useProfileStyles();
+
   return (
     <View style={styles.statCell}>
       <Text numberOfLines={1} style={styles.statValue}>
@@ -507,6 +509,8 @@ function StatCell({ label, value }: { label: string; value: string }) {
 }
 
 function TopStat({ label, value }: { label: string; value: string }) {
+  const { styles } = useProfileStyles();
+
   return (
     <View style={styles.topStatRow}>
       <Text style={styles.topStatLabel}>{label}</Text>
@@ -524,6 +528,8 @@ function Section({
   children: React.ReactNode;
   title: string;
 }) {
+  const { styles } = useProfileStyles();
+
   return (
     <View style={styles.section}>
       <View style={styles.sectionHeader}>
@@ -536,6 +542,8 @@ function Section({
 }
 
 function SettingsPanel({ children }: { children: React.ReactNode }) {
+  const { styles } = useProfileStyles();
+
   return <View style={styles.settingsPanel}>{children}</View>;
 }
 
@@ -556,6 +564,7 @@ function SettingsRow({
   rightElement?: React.ReactNode;
   value?: string;
 }) {
+  const { colors, styles } = useProfileStyles();
   const content = (
     <>
       <View style={styles.rowIcon}>
@@ -615,7 +624,7 @@ function ThemeModal({
 }) {
   return (
     <BottomSheet
-      description="Die Auswahl wird gespeichert. Dunkel wird später auf die ganze App angewendet."
+      description="Die Auswahl wird sofort angewendet und gespeichert."
       onClose={onCancel}
       title="Erscheinungsbild"
       visible={visible}
@@ -671,7 +680,15 @@ function ExportModal({
   );
 }
 
-const styles = StyleSheet.create({
+function useProfileStyles() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
+
+  return { colors, styles };
+}
+
+function makeStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   avatarFrame: {
     alignItems: 'center',
     backgroundColor: colors.surfaceWarm,
@@ -971,4 +988,5 @@ const styles = StyleSheet.create({
     fontSize: typography.size.sm,
     fontWeight: typography.weight.bold,
   },
-});
+  });
+}

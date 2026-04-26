@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 
 import { supabase } from '@/lib/supabase';
-import { colors } from '@/theme/colors';
+import { useTheme, type ThemeColors } from '@/theme/ThemeProvider';
 import { radii, spacing } from '@/theme/spacing';
 import { typography } from '@/theme/typography';
 
@@ -24,6 +24,7 @@ function getErrorMessage(error: unknown) {
 }
 
 export function EmailOtpForm() {
+  const { colors, resolved, styles } = useEmailOtpFormStyles();
   const [step, setStep] = useState<Step>('email');
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
@@ -113,6 +114,7 @@ export function EmailOtpForm() {
           editable={step === 'email' && !isSendingCode}
           inputMode="email"
           keyboardType="email-address"
+          keyboardAppearance={resolved}
           returnKeyType="send"
           onSubmitEditing={sendCode}
         />
@@ -138,6 +140,7 @@ export function EmailOtpForm() {
             autoFocus
             inputMode="numeric"
             keyboardType="number-pad"
+            keyboardAppearance={resolved}
             maxLength={6}
             returnKeyType="done"
             textContentType="oneTimeCode"
@@ -180,7 +183,15 @@ export function EmailOtpForm() {
   );
 }
 
-const styles = StyleSheet.create({
+function useEmailOtpFormStyles() {
+  const { colors, resolved } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
+
+  return { colors, resolved, styles };
+}
+
+function makeStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
     gap: spacing.lg,
   },
@@ -244,4 +255,5 @@ const styles = StyleSheet.create({
     fontSize: typography.size.base,
     fontWeight: typography.weight.extraBold,
   },
-});
+  });
+}

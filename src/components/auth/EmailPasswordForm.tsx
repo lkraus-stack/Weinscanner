@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 
 import { supabase } from '@/lib/supabase';
-import { colors } from '@/theme/colors';
+import { useTheme, type ThemeColors } from '@/theme/ThemeProvider';
 import { radii, spacing } from '@/theme/spacing';
 import { typography } from '@/theme/typography';
 
@@ -22,6 +22,7 @@ function getErrorMessage(error: unknown) {
 }
 
 export function EmailPasswordForm() {
+  const { colors, resolved, styles } = useEmailPasswordFormStyles();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [message, setMessage] = useState<string | null>(null);
@@ -106,6 +107,7 @@ export function EmailPasswordForm() {
           autoCorrect={false}
           inputMode="email"
           keyboardType="email-address"
+          keyboardAppearance={resolved}
           returnKeyType="next"
         />
       </View>
@@ -120,6 +122,7 @@ export function EmailPasswordForm() {
           placeholderTextColor={colors.placeholder}
           autoCapitalize="none"
           autoCorrect={false}
+          keyboardAppearance={resolved}
           returnKeyType="done"
           secureTextEntry
           textContentType="password"
@@ -157,7 +160,15 @@ export function EmailPasswordForm() {
   );
 }
 
-const styles = StyleSheet.create({
+function useEmailPasswordFormStyles() {
+  const { colors, resolved } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
+
+  return { colors, resolved, styles };
+}
+
+function makeStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
     gap: spacing.lg,
   },
@@ -220,4 +231,5 @@ const styles = StyleSheet.create({
     fontSize: typography.size.base,
     fontWeight: typography.weight.extraBold,
   },
-});
+  });
+}

@@ -1,4 +1,5 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { useMemo } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -7,7 +8,7 @@ import {
   View,
 } from 'react-native';
 
-import { colors } from '@/theme/colors';
+import { useTheme, type ThemeColors } from '@/theme/ThemeProvider';
 import { radii, spacing } from '@/theme/spacing';
 import { typography } from '@/theme/typography';
 
@@ -25,6 +26,8 @@ type EmptyStateProps = {
 };
 
 export function EmptyState({ icon, title, description, cta }: EmptyStateProps) {
+  const { colors, styles } = useEmptyStateStyles();
+
   return (
     <View style={styles.container}>
       <View style={styles.iconShell}>
@@ -53,7 +56,15 @@ export function EmptyState({ icon, title, description, cta }: EmptyStateProps) {
   );
 }
 
-const styles = StyleSheet.create({
+function useEmptyStateStyles() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
+
+  return { colors, styles };
+}
+
+function makeStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
     alignItems: 'center',
     gap: spacing.xxl,
@@ -106,4 +117,5 @@ const styles = StyleSheet.create({
     fontSize: typography.size.base,
     fontWeight: typography.weight.extraBold,
   },
-});
+  });
+}

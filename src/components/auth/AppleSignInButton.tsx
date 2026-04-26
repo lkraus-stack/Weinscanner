@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Alert, Platform, StyleSheet, View } from 'react-native';
 
 import { supabase } from '@/lib/supabase';
+import { useTheme } from '@/theme/ThemeProvider';
 
 function getErrorCode(error: unknown) {
   if (typeof error === 'object' && error !== null && 'code' in error) {
@@ -21,6 +22,7 @@ function getErrorMessage(error: unknown) {
 }
 
 export function AppleSignInButton() {
+  const { resolved } = useTheme();
   const [isLoading, setIsLoading] = useState(false);
 
   if (Platform.OS !== 'ios') {
@@ -65,7 +67,11 @@ export function AppleSignInButton() {
     <View style={styles.container} pointerEvents={isLoading ? 'none' : 'auto'}>
       <AppleAuthentication.AppleAuthenticationButton
         buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
-        buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
+        buttonStyle={
+          resolved === 'dark'
+            ? AppleAuthentication.AppleAuthenticationButtonStyle.WHITE
+            : AppleAuthentication.AppleAuthenticationButtonStyle.BLACK
+        }
         cornerRadius={12}
         style={styles.button}
         onPress={handlePress}
