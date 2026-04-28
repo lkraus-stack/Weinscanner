@@ -2,7 +2,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { Image } from 'expo-image';
 import * as Haptics from 'expo-haptics';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -85,6 +85,7 @@ export default function ScanReviewScreen() {
   const initialWidth = parseDimension(params.width);
   const initialHeight = parseDimension(params.height);
   const flow = useScanFlow(initialUri);
+  const { setUri } = flow;
   const originalUriRef = useRef(initialUri ?? null);
   const originalDimensionsRef = useRef(
     initialWidth && initialHeight
@@ -97,6 +98,22 @@ export default function ScanReviewScreen() {
 
   const isUploading = flow.state.status === 'uploading';
   const isCropping = flow.state.status === 'cropping';
+
+  useEffect(() => {
+    if (!initialUri || originalUriRef.current === initialUri) {
+      return;
+    }
+
+    uploadRunRef.current += 1;
+    originalUriRef.current = initialUri;
+    originalDimensionsRef.current =
+      initialWidth && initialHeight
+        ? { height: initialHeight, width: initialWidth }
+        : null;
+    setSelectedCrop('original');
+    setIsCropModalVisible(false);
+    setUri(initialUri);
+  }, [initialHeight, initialUri, initialWidth, setUri]);
 
   function goBackToCamera() {
     flow.retake();
@@ -236,6 +253,7 @@ export default function ScanReviewScreen() {
 
       <View style={styles.imageArea}>
         <Image
+          key={flow.state.uri}
           source={{ uri: flow.state.uri }}
           style={styles.image}
           contentFit="contain"

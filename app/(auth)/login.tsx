@@ -15,11 +15,11 @@ import { useTheme, type ThemeColors } from '@/theme/ThemeProvider';
 import { radii, spacing } from '@/theme/spacing';
 import { typography } from '@/theme/typography';
 
-type LoginMode = 'password' | 'code';
+type LoginMode = 'password' | 'link';
 
 export default function LoginScreen() {
   const { styles } = useLoginStyles();
-  const [loginMode, setLoginMode] = useState<LoginMode>('password');
+  const [loginMode, setLoginMode] = useState<LoginMode>('link');
 
   return (
     <KeyboardAvoidingView
@@ -47,6 +47,22 @@ export default function LoginScreen() {
             <Pressable
               style={[
                 styles.segmentButton,
+                loginMode === 'link' && styles.segmentButtonActive,
+              ]}
+              onPress={() => setLoginMode('link')}
+            >
+              <Text
+                style={[
+                  styles.segmentText,
+                  loginMode === 'link' && styles.segmentTextActive,
+                ]}
+              >
+                Link
+              </Text>
+            </Pressable>
+            <Pressable
+              style={[
+                styles.segmentButton,
                 loginMode === 'password' && styles.segmentButtonActive,
               ]}
               onPress={() => setLoginMode('password')}
@@ -58,22 +74,6 @@ export default function LoginScreen() {
                 ]}
               >
                 Passwort
-              </Text>
-            </Pressable>
-            <Pressable
-              style={[
-                styles.segmentButton,
-                loginMode === 'code' && styles.segmentButtonActive,
-              ]}
-              onPress={() => setLoginMode('code')}
-            >
-              <Text
-                style={[
-                  styles.segmentText,
-                  loginMode === 'code' && styles.segmentTextActive,
-                ]}
-              >
-                Code
               </Text>
             </Pressable>
           </View>

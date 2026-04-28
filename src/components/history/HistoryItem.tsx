@@ -76,6 +76,7 @@ export const HistoryItem = memo(function HistoryItem({
         <View style={styles.thumbnailFrame}>
           {item.labelImageUrl ? (
             <Image
+              key={item.labelImagePath ?? item.labelImageUrl}
               source={{ uri: item.labelImageUrl }}
               style={styles.thumbnail}
               contentFit="cover"

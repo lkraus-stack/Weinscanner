@@ -5,6 +5,7 @@ import {
 
 import { batchSignedUrls } from '@/lib/storage';
 import { supabase } from '@/lib/supabase';
+import { useAuthStore } from '@/stores/auth-store';
 import type { Tables } from '@/types/database';
 
 export type RatingsFilters = {
@@ -74,16 +75,23 @@ function mapRatingListItem(
 }
 
 export function useRatings(filters: RatingsFilters) {
+  const user = useAuthStore((state) => state.user);
+
   return useInfiniteQuery<
     RatingsPage,
     Error,
     InfiniteData<RatingsPage>,
-    [string, RatingsFilters],
+    [string, string | undefined, RatingsFilters],
     number
   >({
+    enabled: Boolean(user?.id),
     getNextPageParam: (lastPage) => lastPage.nextPage,
     initialPageParam: 0,
     queryFn: async ({ pageParam }) => {
+      if (!user?.id) {
+        throw new Error('Nicht eingeloggt.');
+      }
+
       const from = pageParam * RATINGS_PAGE_SIZE;
       const to = from + RATINGS_PAGE_SIZE - 1;
       let query = supabase
@@ -146,7 +154,7 @@ export function useRatings(filters: RatingsFilters) {
           rows.length === RATINGS_PAGE_SIZE ? pageParam + 1 : undefined,
       };
     },
-    queryKey: ['ratings', filters],
+    queryKey: ['ratings', user?.id, filters],
     staleTime: 30_000,
   });
 }

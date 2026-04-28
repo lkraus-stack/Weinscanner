@@ -87,7 +87,7 @@ Aktualisiere sie wenn neue Konventionen sich etablieren.
 
 ## Globale Architektur-Entscheidungen (locked-in)
 - Vantero über OpenAI-SDK mit baseURL=https://api.vantero.chat/v1
-- Modell standardmäßig chat-model-gemini-2.5-pro
+- Modell standardmäßig chat-model-gemini-2.5-flash
   (über VANTERO_MODEL_ID konfigurierbar)
 - Keine Embeddings, nur Postgres-Volltext für Cache-Lookups
 - Storage-Pfad: ${user_id}/${timestamp}.jpg in wine-labels Bucket

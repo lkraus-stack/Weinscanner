@@ -92,10 +92,20 @@ export const InventoryItem = memo(function InventoryItem({
 
   return (
     <Animated.View entering={entering}>
-      <View style={[styles.card, isEmpty && styles.emptyCard]}>
+      <Pressable
+        accessibilityLabel="Bestandsaktionen öffnen"
+        accessibilityRole="button"
+        onPress={() => onMore(item)}
+        style={({ pressed }) => [
+          styles.card,
+          pressed && styles.pressed,
+          isEmpty && styles.emptyCard,
+        ]}
+      >
         <View style={styles.thumbnailFrame}>
           {item.imageUrl ? (
             <Image
+              key={item.imagePath ?? item.imageUrl}
               cachePolicy="memory-disk"
               contentFit="cover"
               source={{ uri: item.imageUrl }}
@@ -120,7 +130,10 @@ export const InventoryItem = memo(function InventoryItem({
             <Pressable
               accessibilityLabel="Bestandsaktionen öffnen"
               accessibilityRole="button"
-              onPress={() => onMore(item)}
+              onPress={(event) => {
+                event.stopPropagation();
+                onMore(item);
+              }}
               style={styles.moreButton}
             >
               <Ionicons
@@ -163,7 +176,10 @@ export const InventoryItem = memo(function InventoryItem({
           <Pressable
             accessibilityRole="button"
             disabled={isEmpty}
-            onPress={() => onDrink(item)}
+            onPress={(event) => {
+              event.stopPropagation();
+              onDrink(item);
+            }}
             style={({ pressed }) => [
               styles.drinkButton,
               pressed && styles.pressed,
@@ -185,7 +201,7 @@ export const InventoryItem = memo(function InventoryItem({
             </Text>
           </Pressable>
         </View>
-      </View>
+      </Pressable>
     </Animated.View>
   );
 });

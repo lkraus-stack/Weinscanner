@@ -28,6 +28,17 @@ EXPO_PUBLIC_SUPABASE_ANON_KEY=dein-anon-key
 
 `.env.local` ist gitignored. `.env.example` bleibt ohne Secrets im Repo.
 
+## Edge Function Secrets
+
+Die KI-Analyse läuft über Vantero in Supabase Edge Functions. Das Mobile-Bundle
+enthält keinen KI-Key. Das Standardmodell ist `chat-model-gemini-2.5-flash`.
+Falls du das Modell explizit als Supabase Secret setzt oder dort noch ein
+alter Wert steht, nutze:
+
+```bash
+VANTERO_MODEL_ID=chat-model-gemini-2.5-flash
+```
+
 ## Nützliche Checks
 
 ```bash

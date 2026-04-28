@@ -1,4 +1,4 @@
-import { useReducer } from 'react';
+import { useCallback, useMemo, useReducer } from 'react';
 
 import type { UploadResult } from '@/lib/storage';
 
@@ -88,15 +88,47 @@ export function useScanFlow(initialUri?: string) {
     uri: initialUri ?? null,
   });
 
-  return {
-    state,
-    setUri: (uri: string) => dispatch({ type: 'set_uri', uri }),
-    startCropping: () => dispatch({ type: 'start_cropping' }),
-    startUpload: () => dispatch({ type: 'start_upload' }),
-    completeUpload: (uploadResult: UploadResult) =>
+  const setUri = useCallback(
+    (uri: string) => dispatch({ type: 'set_uri', uri }),
+    []
+  );
+  const startCropping = useCallback(
+    () => dispatch({ type: 'start_cropping' }),
+    []
+  );
+  const startUpload = useCallback(() => dispatch({ type: 'start_upload' }), []);
+  const completeUpload = useCallback(
+    (uploadResult: UploadResult) =>
       dispatch({ type: 'complete_upload', uploadResult }),
-    failUpload: (error: string) => dispatch({ type: 'fail_upload', error }),
-    retake: () => dispatch({ type: 'retake' }),
-    reset: () => dispatch({ type: 'reset' }),
-  };
+    []
+  );
+  const failUpload = useCallback(
+    (error: string) => dispatch({ type: 'fail_upload', error }),
+    []
+  );
+  const retake = useCallback(() => dispatch({ type: 'retake' }), []);
+  const reset = useCallback(() => dispatch({ type: 'reset' }), []);
+
+  return useMemo(
+    () => ({
+      state,
+      setUri,
+      startCropping,
+      startUpload,
+      completeUpload,
+      failUpload,
+      retake,
+      reset,
+    }),
+    [
+      completeUpload,
+      failUpload,
+      reset,
+      retake,
+      setUri,
+      startCropping,
+      startUpload,
+      state,
+    ]
+  );
 }

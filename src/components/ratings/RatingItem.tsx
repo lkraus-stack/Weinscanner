@@ -83,6 +83,7 @@ export const RatingItem = memo(function RatingItem({
         <View style={styles.thumbnailFrame}>
           {item.scan?.signed_url ? (
             <Image
+              key={item.scan.label_image_url ?? item.scan.signed_url}
               cachePolicy="memory-disk"
               contentFit="cover"
               source={{ uri: item.scan.signed_url }}

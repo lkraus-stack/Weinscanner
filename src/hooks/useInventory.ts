@@ -5,6 +5,7 @@ import {
 
 import { batchSignedUrls } from '@/lib/storage';
 import { supabase } from '@/lib/supabase';
+import { useAuthStore } from '@/stores/auth-store';
 
 export type InventoryFilters = {
   hideEmptyInventory?: boolean;
@@ -108,6 +109,7 @@ async function mapInventoryRows(
 }
 
 export function useInventory(filters: InventoryFilters) {
+  const user = useAuthStore((state) => state.user);
   const hideEmptyInventory = filters.hideEmptyInventory ?? false;
   const storageLocation = filters.storageLocation?.trim() || undefined;
 
@@ -115,12 +117,21 @@ export function useInventory(filters: InventoryFilters) {
     InventoryPage,
     Error,
     InfiniteData<InventoryPage>,
-    [string, { hideEmptyInventory: boolean; storageLocation?: string }],
+    [
+      string,
+      string | undefined,
+      { hideEmptyInventory: boolean; storageLocation?: string },
+    ],
     number
   >({
+    enabled: Boolean(user?.id),
     getNextPageParam: (lastPage) => lastPage.nextPage,
     initialPageParam: 0,
     queryFn: async ({ pageParam }) => {
+      if (!user?.id) {
+        throw new Error('Nicht eingeloggt.');
+      }
+
       const { data, error } = await supabase.rpc(
         'get_user_inventory_with_photos',
         {
@@ -143,7 +154,7 @@ export function useInventory(filters: InventoryFilters) {
           rows.length === INVENTORY_PAGE_SIZE ? pageParam + 1 : undefined,
       };
     },
-    queryKey: ['inventory', { hideEmptyInventory, storageLocation }],
+    queryKey: ['inventory', user?.id, { hideEmptyInventory, storageLocation }],
     staleTime: 30_000,
   });
 }

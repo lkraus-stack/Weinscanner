@@ -1,10 +1,14 @@
 import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import * as Sentry from '@sentry/react-native';
+import {
+  QueryClient,
+  QueryClientProvider,
+  useQueryClient,
+} from '@tanstack/react-query';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { Stack, useRouter, useSegments } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
@@ -41,12 +45,39 @@ export default function RootLayout() {
 }
 
 function ThemedRootContent() {
-  const { session, isLoading } = useAuth();
+  const { isLoading, isPasswordRecovery, session, user } = useAuth();
   const { colors, resolved } = useTheme();
+  const queryClient = useQueryClient();
   const router = useRouter();
   const segments = useSegments();
+  const previousUserIdRef = useRef<string | null | undefined>(undefined);
   const firstSegment = segments[0];
+  const activeRoute = segments[1];
   const statusBarStyle = resolved === 'dark' ? 'light' : 'dark';
+
+  useEffect(() => {
+    if (isLoading) {
+      return;
+    }
+
+    const currentUserId = user?.id ?? null;
+    const previousUserId = previousUserIdRef.current;
+
+    if (previousUserId !== undefined && previousUserId !== currentUserId) {
+      queryClient.clear();
+    }
+
+    if (user) {
+      Sentry.setUser({
+        email: user.email ?? undefined,
+        id: user.id,
+      });
+    } else {
+      Sentry.setUser(null);
+    }
+
+    previousUserIdRef.current = currentUserId;
+  }, [isLoading, queryClient, user]);
 
   useEffect(() => {
     if (isLoading) {
@@ -55,13 +86,25 @@ function ThemedRootContent() {
 
     const inAuthGroup = firstSegment === '(auth)';
     const inAppGroup = firstSegment === '(app)';
+    const inAuthCallback =
+      firstSegment === 'auth' && activeRoute === 'callback';
+    const inAuthRoute = inAuthGroup || inAuthCallback;
+    const inResetPassword = inAuthGroup && activeRoute === 'reset-password';
 
-    if (!session && !inAuthGroup) {
+    if (session && isPasswordRecovery) {
+      if (!inResetPassword) {
+        router.replace('/(auth)/reset-password');
+      }
+
+      return;
+    }
+
+    if (!session && !inAuthRoute) {
       router.replace('/(auth)/login');
     } else if (session && !inAppGroup) {
       router.replace('/(app)');
     }
-  }, [firstSegment, isLoading, router, session]);
+  }, [activeRoute, firstSegment, isLoading, isPasswordRecovery, router, session]);
 
   useEffect(() => {
     if (!isLoading) {

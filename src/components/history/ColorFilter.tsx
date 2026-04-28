@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import type { WineColor } from '@/hooks/useHistory';
 import { radii, spacing } from '@/theme/spacing';
@@ -30,11 +30,7 @@ export function ColorFilter({ onChange, value }: Props) {
   const styles = useMemo(() => makeStyles(colors), [colors]);
 
   return (
-    <ScrollView
-      horizontal
-      showsHorizontalScrollIndicator={false}
-      contentContainerStyle={styles.content}
-    >
+    <View style={styles.content}>
       {FILTER_OPTIONS.map((option) => {
         const isSelected = (value ?? null) === option.value;
 
@@ -57,15 +53,18 @@ export function ColorFilter({ onChange, value }: Props) {
           </Pressable>
         );
       })}
-    </ScrollView>
+    </View>
   );
 }
 
 function makeStyles(colors: ThemeColors) {
   return StyleSheet.create({
   content: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: spacing.sm,
     paddingHorizontal: spacing.screenX,
+    rowGap: spacing.sm,
   },
   label: {
     color: colors.textSecondary,

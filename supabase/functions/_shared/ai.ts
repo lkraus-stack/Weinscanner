@@ -8,6 +8,8 @@ type VisionCompletionOptions = {
   userText: string;
 };
 
+const DEFAULT_VANTERO_MODEL = 'chat-model-gemini-2.5-flash';
+
 function readEnv(key: string): string | undefined {
   const value = Deno.env.get(key);
 
@@ -24,7 +26,8 @@ function requiredEnv(key: string): string {
   return value;
 }
 
-export const VANTERO_MODEL = readEnv('VANTERO_MODEL_ID') ?? '';
+export const VANTERO_MODEL =
+  readEnv('VANTERO_MODEL_ID') ?? DEFAULT_VANTERO_MODEL;
 
 export const vanteroClient = new OpenAI({
   apiKey: readEnv('VANTERO_API_KEY') ?? 'missing-vantero-api-key',
@@ -34,7 +37,6 @@ export const vanteroClient = new OpenAI({
 export function assertVanteroConfigured() {
   requiredEnv('VANTERO_API_KEY');
   requiredEnv('VANTERO_API_BASE_URL');
-  requiredEnv('VANTERO_MODEL_ID');
 }
 
 export async function createVisionChatCompletion({

@@ -63,14 +63,12 @@ function getMonthTitle(value: string) {
 
 function buildRows(items: HistoryItemRecord[]) {
   const rows: HistoryListRow[] = [];
-  const stickyHeaderIndices: number[] = [];
   let currentMonthKey: string | null = null;
 
   for (const item of items) {
     const monthKey = getMonthKey(item.scannedAt);
 
     if (monthKey !== currentMonthKey) {
-      stickyHeaderIndices.push(rows.length);
       rows.push({
         id: `month-${monthKey}`,
         title: getMonthTitle(item.scannedAt),
@@ -86,7 +84,7 @@ function buildRows(items: HistoryItemRecord[]) {
     });
   }
 
-  return { rows, stickyHeaderIndices };
+  return rows;
 }
 
 function getErrorMessage(error: unknown) {
@@ -147,10 +145,7 @@ export default function HistoryScreen() {
     () => historyQuery.data?.pages.flatMap((page) => page.data) ?? [],
     [historyQuery.data]
   );
-  const { rows, stickyHeaderIndices } = useMemo(
-    () => buildRows(items),
-    [items]
-  );
+  const rows = useMemo(() => buildRows(items), [items]);
   const isInitialLoading = historyQuery.isLoading;
   const shouldAnimateInitialItems =
     !hasPlayedInitialAnimation && !isInitialLoading && items.length > 0;
@@ -353,7 +348,6 @@ export default function HistoryScreen() {
         renderItem={renderItem}
         keyExtractor={(item) => item.id}
         getItemType={(item) => item.type}
-        stickyHeaderIndices={stickyHeaderIndices}
         onEndReached={loadMore}
         onEndReachedThreshold={0.45}
         ListEmptyComponent={listEmptyComponent}

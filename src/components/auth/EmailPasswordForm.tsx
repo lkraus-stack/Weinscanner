@@ -13,6 +13,8 @@ import { useTheme, type ThemeColors } from '@/theme/ThemeProvider';
 import { radii, spacing } from '@/theme/spacing';
 import { typography } from '@/theme/typography';
 
+const PASSWORD_RESET_REDIRECT_URL = 'winescanner://reset-password';
+
 function getErrorMessage(error: unknown) {
   if (error instanceof Error) {
     return error.message;
@@ -29,10 +31,13 @@ export function EmailPasswordForm() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isSigningIn, setIsSigningIn] = useState(false);
   const [isSigningUp, setIsSigningUp] = useState(false);
+  const [isSendingReset, setIsSendingReset] = useState(false);
 
   const normalizedEmail = email.trim().toLowerCase();
+  const isBusy = isSigningIn || isSigningUp || isSendingReset;
   const canSubmit =
-    normalizedEmail.includes('@') && password.length >= 6 && !isSigningIn && !isSigningUp;
+    normalizedEmail.includes('@') && password.length >= 6 && !isBusy;
+  const canRequestPasswordReset = normalizedEmail.includes('@') && !isBusy;
 
   async function signIn() {
     if (!canSubmit) {
@@ -92,6 +97,36 @@ export function EmailPasswordForm() {
     }
   }
 
+  async function requestPasswordReset() {
+    if (!normalizedEmail.includes('@')) {
+      setErrorMessage('Bitte gib zuerst deine E-Mail-Adresse ein.');
+      return;
+    }
+
+    try {
+      setIsSendingReset(true);
+      setMessage(null);
+      setErrorMessage(null);
+
+      const { error } = await supabase.auth.resetPasswordForEmail(
+        normalizedEmail,
+        {
+          redirectTo: PASSWORD_RESET_REDIRECT_URL,
+        }
+      );
+
+      if (error) {
+        throw error;
+      }
+
+      setMessage('Wir haben dir einen Link zum Zurücksetzen gesendet.');
+    } catch (error: unknown) {
+      setErrorMessage(getErrorMessage(error));
+    } finally {
+      setIsSendingReset(false);
+    }
+  }
+
   return (
     <View style={styles.container}>
       <View style={styles.fieldGroup}>
@@ -109,6 +144,7 @@ export function EmailPasswordForm() {
           keyboardType="email-address"
           keyboardAppearance={resolved}
           returnKeyType="next"
+          textContentType="username"
         />
       </View>
 
@@ -125,6 +161,7 @@ export function EmailPasswordForm() {
           keyboardAppearance={resolved}
           returnKeyType="done"
           secureTextEntry
+          autoComplete="current-password"
           textContentType="password"
           onSubmitEditing={signIn}
         />
@@ -156,6 +193,22 @@ export function EmailPasswordForm() {
           <Text style={styles.secondaryButtonText}>Account erstellen</Text>
         )}
       </Pressable>
+
+      <Pressable
+        accessibilityRole="button"
+        disabled={!canRequestPasswordReset}
+        onPress={requestPasswordReset}
+        style={styles.linkButton}
+      >
+        <Text
+          style={[
+            styles.linkButtonText,
+            !canRequestPasswordReset && styles.linkButtonTextDisabled,
+          ]}
+        >
+          {isSendingReset ? 'Link wird gesendet...' : 'Passwort vergessen?'}
+        </Text>
+      </Pressable>
     </View>
   );
 }
@@ -179,6 +232,19 @@ function makeStyles(colors: ThemeColors) {
     color: colors.text,
     fontSize: typography.size.md,
     fontWeight: typography.weight.bold,
+  },
+  linkButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 34,
+  },
+  linkButtonText: {
+    color: colors.primaryDark,
+    fontSize: typography.size.md,
+    fontWeight: typography.weight.bold,
+  },
+  linkButtonTextDisabled: {
+    color: colors.textSecondary,
   },
   input: {
     backgroundColor: colors.surface,

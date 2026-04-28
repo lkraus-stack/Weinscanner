@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -13,7 +13,7 @@ import { useTheme, type ThemeColors } from '@/theme/ThemeProvider';
 import { radii, spacing } from '@/theme/spacing';
 import { typography } from '@/theme/typography';
 
-type Step = 'email' | 'code';
+const LOGIN_LINK_REDIRECT_URL = 'winescanner://auth/callback';
 
 function getErrorMessage(error: unknown) {
   if (error instanceof Error) {
@@ -25,31 +25,30 @@ function getErrorMessage(error: unknown) {
 
 export function EmailOtpForm() {
   const { colors, resolved, styles } = useEmailOtpFormStyles();
-  const [step, setStep] = useState<Step>('email');
   const [email, setEmail] = useState('');
-  const [code, setCode] = useState('');
+  const [message, setMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [isSendingCode, setIsSendingCode] = useState(false);
-  const [isVerifyingCode, setIsVerifyingCode] = useState(false);
-  const codeInputRef = useRef<TextInput>(null);
+  const [isSendingLink, setIsSendingLink] = useState(false);
+  const [hasSentLink, setHasSentLink] = useState(false);
 
   const normalizedEmail = email.trim().toLowerCase();
-  const canSendCode = normalizedEmail.includes('@') && !isSendingCode;
-  const canVerifyCode = code.length === 6 && !isVerifyingCode;
+  const canSendLink = normalizedEmail.includes('@') && !isSendingLink;
 
-  async function sendCode() {
+  async function sendLoginLink() {
     if (!normalizedEmail.includes('@')) {
       setErrorMessage('Bitte gib eine gültige E-Mail-Adresse ein.');
       return;
     }
 
     try {
-      setIsSendingCode(true);
+      setIsSendingLink(true);
+      setMessage(null);
       setErrorMessage(null);
 
       const { error } = await supabase.auth.signInWithOtp({
         email: normalizedEmail,
         options: {
+          emailRedirectTo: LOGIN_LINK_REDIRECT_URL,
           shouldCreateUser: true,
         },
       });
@@ -58,44 +57,15 @@ export function EmailOtpForm() {
         throw error;
       }
 
-      setStep('code');
-      setCode('');
-      requestAnimationFrame(() => codeInputRef.current?.focus());
+      setHasSentLink(true);
+      setMessage(
+        'Wir haben dir einen Login-Link gesendet. Öffne die Mail auf diesem iPhone.'
+      );
     } catch (error: unknown) {
       setErrorMessage(getErrorMessage(error));
     } finally {
-      setIsSendingCode(false);
+      setIsSendingLink(false);
     }
-  }
-
-  async function verifyCode() {
-    if (code.length !== 6) {
-      setErrorMessage('Bitte gib den 6-stelligen Code ein.');
-      return;
-    }
-
-    try {
-      setIsVerifyingCode(true);
-      setErrorMessage(null);
-
-      const { error } = await supabase.auth.verifyOtp({
-        email: normalizedEmail,
-        token: code,
-        type: 'email',
-      });
-
-      if (error) {
-        throw error;
-      }
-    } catch (error: unknown) {
-      setErrorMessage(getErrorMessage(error));
-    } finally {
-      setIsVerifyingCode(false);
-    }
-  }
-
-  function handleCodeChange(nextCode: string) {
-    setCode(nextCode.replace(/\D/g, '').slice(0, 6));
   }
 
   return (
@@ -111,74 +81,32 @@ export function EmailOtpForm() {
           autoCapitalize="none"
           autoComplete="email"
           autoCorrect={false}
-          editable={step === 'email' && !isSendingCode}
+          editable={!isSendingLink}
           inputMode="email"
           keyboardType="email-address"
           keyboardAppearance={resolved}
           returnKeyType="send"
-          onSubmitEditing={sendCode}
+          textContentType="username"
+          onSubmitEditing={sendLoginLink}
         />
       </View>
 
-      {step === 'code' ? (
-        <View style={styles.fieldGroup}>
-          <View style={styles.codeHeader}>
-            <Text style={styles.label}>Code</Text>
-            <Pressable onPress={sendCode} disabled={isSendingCode}>
-              <Text style={styles.linkText}>
-                {isSendingCode ? 'Wird gesendet...' : 'Code erneut senden'}
-              </Text>
-            </Pressable>
-          </View>
-          <TextInput
-            ref={codeInputRef}
-            style={[styles.input, styles.codeInput]}
-            value={code}
-            onChangeText={handleCodeChange}
-            placeholder="123456"
-            placeholderTextColor={colors.placeholder}
-            autoFocus
-            inputMode="numeric"
-            keyboardType="number-pad"
-            keyboardAppearance={resolved}
-            maxLength={6}
-            returnKeyType="done"
-            textContentType="oneTimeCode"
-            onSubmitEditing={verifyCode}
-          />
-          <Text style={styles.hintText}>
-            Gib den 6-stelligen Code aus deiner E-Mail ein.
-          </Text>
-        </View>
-      ) : null}
-
+      {message ? <Text style={styles.messageText}>{message}</Text> : null}
       {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
 
-      {step === 'email' ? (
-        <Pressable
-          style={[styles.button, !canSendCode && styles.buttonDisabled]}
-          onPress={sendCode}
-          disabled={!canSendCode}
-        >
-          {isSendingCode ? (
-            <ActivityIndicator color={colors.white} />
-          ) : (
-            <Text style={styles.buttonText}>Code senden</Text>
-          )}
-        </Pressable>
-      ) : (
-        <Pressable
-          style={[styles.button, !canVerifyCode && styles.buttonDisabled]}
-          onPress={verifyCode}
-          disabled={!canVerifyCode}
-        >
-          {isVerifyingCode ? (
-            <ActivityIndicator color={colors.white} />
-          ) : (
-            <Text style={styles.buttonText}>Einloggen</Text>
-          )}
-        </Pressable>
-      )}
+      <Pressable
+        style={[styles.button, !canSendLink && styles.buttonDisabled]}
+        onPress={sendLoginLink}
+        disabled={!canSendLink}
+      >
+        {isSendingLink ? (
+          <ActivityIndicator color={colors.white} />
+        ) : (
+          <Text style={styles.buttonText}>
+            {hasSentLink ? 'Login-Link erneut senden' : 'Login-Link senden'}
+          </Text>
+        )}
+      </Pressable>
     </View>
   );
 }
@@ -213,31 +141,15 @@ function makeStyles(colors: ThemeColors) {
     minHeight: 54,
     paddingHorizontal: spacing.lg,
   },
-  codeHeader: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  codeInput: {
-    fontSize: typography.size.xl,
-    fontWeight: typography.weight.bold,
-    letterSpacing: 0,
-    textAlign: 'center',
-  },
-  hintText: {
-    color: colors.textSecondary,
-    fontSize: typography.size.sm,
-    lineHeight: typography.lineHeight.sm,
-  },
   errorText: {
     color: colors.error,
     fontSize: typography.size.md,
     lineHeight: typography.lineHeight.md,
   },
-  linkText: {
-    color: colors.primaryDark,
+  messageText: {
+    color: colors.success,
     fontSize: typography.size.md,
-    fontWeight: typography.weight.bold,
+    lineHeight: typography.lineHeight.md,
   },
   button: {
     alignItems: 'center',

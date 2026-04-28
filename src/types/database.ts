@@ -387,6 +387,23 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      ensure_profile: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          avatar_url: string | null
+          created_at: string
+          display_name: string | null
+          id: string
+          onboarding_completed: boolean | null
+          preferences: Json | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "profiles"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       get_user_inventory_with_photos: {
         Args: {
           hide_empty_inventory?: boolean

@@ -116,18 +116,28 @@ export async function getProfile(): Promise<ProfileWithAvatar> {
     .from('profiles')
     .select()
     .eq('id', user.id)
-    .single();
+    .maybeSingle();
+
+  assertProfileError(error);
+
+  const profile = data ?? (await ensureProfile());
+
+  return {
+    ...profile,
+    avatarSignedUrl: await createAvatarSignedUrl(profile.avatar_url),
+  };
+}
+
+async function ensureProfile(): Promise<ProfileRecord> {
+  const { data, error } = await supabase.rpc('ensure_profile');
 
   assertProfileError(error);
 
   if (!data) {
-    throw new Error('Profil wurde nicht gefunden.');
+    throw new Error('Profil konnte nicht angelegt werden.');
   }
 
-  return {
-    ...data,
-    avatarSignedUrl: await createAvatarSignedUrl(data.avatar_url),
-  };
+  return data;
 }
 
 export async function updateProfile(

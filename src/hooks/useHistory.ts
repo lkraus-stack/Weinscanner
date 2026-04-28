@@ -5,6 +5,7 @@ import {
 
 import { batchSignedUrls } from '@/lib/storage';
 import { supabase } from '@/lib/supabase';
+import { useAuthStore } from '@/stores/auth-store';
 
 export type WineColor = 'weiss' | 'rot' | 'rose' | 'schaum' | 'suess';
 
@@ -109,6 +110,7 @@ function mapHistoryRow(
 }
 
 export function useHistory(filters: HistoryFilters) {
+  const user = useAuthStore((state) => state.user);
   const searchQuery = normalizeSearchQuery(filters.searchQuery);
   const wineColor = filters.wineColor;
 
@@ -116,12 +118,17 @@ export function useHistory(filters: HistoryFilters) {
     HistoryPage,
     Error,
     InfiniteData<HistoryPage>,
-    [string, { searchQuery?: string; wineColor?: WineColor }],
+    [string, string | undefined, { searchQuery?: string; wineColor?: WineColor }],
     number
   >({
+    enabled: Boolean(user?.id),
     getNextPageParam: (lastPage) => lastPage.nextPage,
     initialPageParam: 0,
     queryFn: async ({ pageParam }) => {
+      if (!user?.id) {
+        throw new Error('Nicht eingeloggt.');
+      }
+
       const { data, error } = await supabase.rpc('get_user_scan_history', {
         page_limit: HISTORY_PAGE_SIZE,
         page_offset: pageParam,
@@ -144,7 +151,7 @@ export function useHistory(filters: HistoryFilters) {
             : undefined,
       };
     },
-    queryKey: ['history', { searchQuery, wineColor }],
+    queryKey: ['history', user?.id, { searchQuery, wineColor }],
     staleTime: 30_000,
   });
 }

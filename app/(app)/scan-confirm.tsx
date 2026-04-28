@@ -1,8 +1,9 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { useQueryClient } from '@tanstack/react-query';
 import * as Haptics from 'expo-haptics';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -541,6 +542,7 @@ function buildSavePayload({
 export default function ScanConfirmScreen() {
   const { colors, styles } = useScanConfirmStyles();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const insets = useSafeAreaInsets();
   const showToast = useToastStore((state) => state.showToast);
   const params = useLocalSearchParams<{
@@ -564,6 +566,7 @@ export default function ScanConfirmScreen() {
   const [isSaving, setIsSaving] = useState(false);
   const [loadingIndex, setLoadingIndex] = useState(0);
   const [retryToken, setRetryToken] = useState(0);
+  const analysisRunRef = useRef(0);
 
   useEffect(() => {
     if (!isLoading) {
@@ -581,6 +584,8 @@ export default function ScanConfirmScreen() {
 
   useEffect(() => {
     let isMounted = true;
+    const analysisRunId = analysisRunRef.current + 1;
+    analysisRunRef.current = analysisRunId;
 
     async function runAnalysis() {
       if (!signedUrl) {
@@ -600,7 +605,7 @@ export default function ScanConfirmScreen() {
 
         const result = await scanWineFromLabel(signedUrl);
 
-        if (!isMounted) return;
+        if (!isMounted || analysisRunId !== analysisRunRef.current) return;
 
         const normalizedExtraction = extractionFromScanResult(result);
 
@@ -608,7 +613,7 @@ export default function ScanConfirmScreen() {
         setOriginalExtraction(normalizedExtraction);
         setExtraction(normalizedExtraction);
       } catch (error: unknown) {
-        if (!isMounted) return;
+        if (!isMounted || analysisRunId !== analysisRunRef.current) return;
 
         console.error('Etikett-Analyse fehlgeschlagen:', error);
         setErrorMessage(
@@ -617,7 +622,7 @@ export default function ScanConfirmScreen() {
             : 'Etikett konnte nicht analysiert werden.'
         );
       } finally {
-        if (isMounted) {
+        if (isMounted && analysisRunId === analysisRunRef.current) {
           setIsLoading(false);
         }
       }
@@ -708,7 +713,7 @@ export default function ScanConfirmScreen() {
 
     try {
       setIsSaving(true);
-      await saveScan(
+      const savedScan = await saveScan(
         buildSavePayload({
           corrections,
           extraction,
@@ -720,6 +725,13 @@ export default function ScanConfirmScreen() {
       );
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       showToast('Wein gespeichert');
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['history'] }),
+        queryClient.invalidateQueries({ queryKey: ['user-stats'] }),
+        queryClient.invalidateQueries({
+          queryKey: ['scan-detail', savedScan.scanId],
+        }),
+      ]);
       router.replace('/(app)');
     } catch (error: unknown) {
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
@@ -798,6 +810,7 @@ export default function ScanConfirmScreen() {
           <>
             {signedUrl ? (
               <Image
+                key={storagePath ?? signedUrl}
                 cachePolicy="memory-disk"
                 contentFit="cover"
                 source={{ uri: signedUrl }}

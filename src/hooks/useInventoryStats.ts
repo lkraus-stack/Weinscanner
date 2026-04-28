@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 
 import { supabase } from '@/lib/supabase';
+import { useAuthStore } from '@/stores/auth-store';
 import type { Tables } from '@/types/database';
 
 type InventoryStatsRow = Pick<
@@ -57,8 +58,15 @@ function mapInventoryStats(rows: InventoryStatsRow[]): InventoryStats {
 }
 
 export function useInventoryStats() {
+  const user = useAuthStore((state) => state.user);
+
   return useQuery<InventoryStats, Error>({
+    enabled: Boolean(user?.id),
     queryFn: async () => {
+      if (!user?.id) {
+        throw new Error('Nicht eingeloggt.');
+      }
+
       const { data, error } = await supabase
         .from('inventory_items')
         .select('id, vintage_id, quantity, storage_location, purchase_price');
@@ -69,7 +77,7 @@ export function useInventoryStats() {
 
       return mapInventoryStats((data ?? []) as InventoryStatsRow[]);
     },
-    queryKey: ['inventory-stats'],
+    queryKey: ['inventory-stats', user?.id],
     staleTime: 60_000,
   });
 }

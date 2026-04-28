@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 
 import { supabase } from '@/lib/supabase';
+import { useAuthStore } from '@/stores/auth-store';
 import type { Tables } from '@/types/database';
 
 type WineRow = Pick<
@@ -224,18 +225,23 @@ async function fetchScanDetail(scanId: string): Promise<ScanDetail> {
 }
 
 export function useScanDetail(scanId?: string) {
+  const user = useAuthStore((state) => state.user);
   const normalizedScanId = normalizeScanId(scanId);
 
   return useQuery<ScanDetail, Error>({
-    enabled: Boolean(normalizedScanId),
+    enabled: Boolean(normalizedScanId && user?.id),
     queryFn: () => {
       if (!normalizedScanId) {
         throw new Error('Scan-ID fehlt.');
       }
 
+      if (!user?.id) {
+        throw new Error('Nicht eingeloggt.');
+      }
+
       return fetchScanDetail(normalizedScanId);
     },
-    queryKey: ['scan-detail', normalizedScanId],
+    queryKey: ['scan-detail', normalizedScanId, user?.id],
     staleTime: 60_000,
   });
 }

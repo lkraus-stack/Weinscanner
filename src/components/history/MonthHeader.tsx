@@ -25,7 +25,7 @@ function makeStyles(colors: ThemeColors) {
   container: {
     backgroundColor: colors.background,
     paddingHorizontal: spacing.screenX,
-    paddingTop: spacing.xl,
+    paddingTop: spacing.md,
     paddingBottom: spacing.sm,
   },
   title: {

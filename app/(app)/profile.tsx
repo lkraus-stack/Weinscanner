@@ -89,6 +89,9 @@ export default function ProfileScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const user = useAuthStore((state) => state.user);
+  const clearPasswordRecovery = useAuthStore(
+    (state) => state.clearPasswordRecovery
+  );
   const showToast = useToastStore((state) => state.showToast);
   const profileQuery = useProfile();
   const statsQuery = useUserStats();
@@ -114,6 +117,11 @@ export default function ProfileScreen() {
       if (error) {
         throw error;
       }
+    },
+    onSuccess: () => {
+      clearPasswordRecovery();
+      queryClient.clear();
+      Sentry.setUser(null);
     },
     onError: async (error: unknown) => {
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
@@ -168,6 +176,9 @@ export default function ProfileScreen() {
     },
     onSuccess: async () => {
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      clearPasswordRecovery();
+      queryClient.clear();
+      Sentry.setUser(null);
       setIsDeleteModalVisible(false);
       showToast('Account gelöscht');
       router.replace('/(auth)/login');
