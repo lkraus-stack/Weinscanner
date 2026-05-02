@@ -31,6 +31,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     buildNumber: '1',
     usesAppleSignIn: true,
     config: {
+      googleMapsApiKey: process.env.EXPO_PUBLIC_GOOGLE_MAPS_IOS_KEY ?? '',
       usesNonExemptEncryption: false,
     },
     infoPlist: {
@@ -38,6 +39,8 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
         'Wir benötigen Zugriff auf deine Kamera, um Weinetiketten zu scannen.',
       NSPhotoLibraryUsageDescription:
         'Wir benötigen Zugriff auf deine Fotos, um Weinetiketten zu importieren.',
+      NSLocationWhenInUseUsageDescription:
+        'Wir nutzen deinen Standort, um Restaurants in deiner Nähe zu finden.',
       ITSAppUsesNonExemptEncryption: false,
     },
     privacyManifests: {
@@ -71,6 +74,15 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
         },
         {
           NSPrivacyCollectedDataType: 'NSPrivacyCollectedDataTypeCrashData',
+          NSPrivacyCollectedDataTypeLinked: false,
+          NSPrivacyCollectedDataTypeTracking: false,
+          NSPrivacyCollectedDataTypePurposes: [
+            'NSPrivacyCollectedDataTypePurposeAppFunctionality',
+          ],
+        },
+        {
+          NSPrivacyCollectedDataType:
+            'NSPrivacyCollectedDataTypeCoarseLocation',
           NSPrivacyCollectedDataTypeLinked: false,
           NSPrivacyCollectedDataTypeTracking: false,
           NSPrivacyCollectedDataTypePurposes: [
@@ -128,6 +140,13 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
         recordAudioAndroid: false,
       },
     ],
+    [
+      'expo-location',
+      {
+        locationWhenInUsePermission:
+          'Wir nutzen deinen Standort, um Restaurants in deiner Nähe zu finden.',
+      },
+    ],
   ],
   experiments: {
     typedRoutes: true,
@@ -143,5 +162,6 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? placeholderAnonKey,
     privacyUrl: process.env.EXPO_PUBLIC_PRIVACY_URL ?? '',
     imprintUrl: process.env.EXPO_PUBLIC_IMPRINT_URL ?? '',
+    googleMapsIosKey: process.env.EXPO_PUBLIC_GOOGLE_MAPS_IOS_KEY ?? '',
   },
 });
