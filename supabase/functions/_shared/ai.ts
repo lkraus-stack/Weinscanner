@@ -3,6 +3,14 @@ import OpenAI from 'npm:openai@4.62.1';
 type VisionCompletionOptions = {
   imageUrl: string;
   maxTokens: number;
+  secondaryImageUrl?: string;
+  signal: AbortSignal;
+  system: string;
+  userText: string;
+};
+
+type TextCompletionOptions = {
+  maxTokens: number;
   signal: AbortSignal;
   system: string;
   userText: string;
@@ -42,6 +50,7 @@ export function assertVanteroConfigured() {
 export async function createVisionChatCompletion({
   imageUrl,
   maxTokens,
+  secondaryImageUrl,
   signal,
   system,
   userText,
@@ -68,7 +77,58 @@ export async function createVisionChatCompletion({
               },
               type: 'image_url',
             },
+            ...(secondaryImageUrl
+              ? [
+                  {
+                    text: 'Zweite Ansicht: Rücketikett, Kapsel oder weiteres Foto derselben Flasche.',
+                    type: 'text' as const,
+                  },
+                  {
+                    image_url: {
+                      url: secondaryImageUrl,
+                    },
+                    type: 'image_url' as const,
+                  },
+                ]
+              : []),
           ],
+          role: 'user',
+        },
+      ],
+      model: VANTERO_MODEL,
+      response_format: {
+        type: 'json_object',
+      },
+    },
+    { signal }
+  );
+  const responseText = response.choices[0]?.message?.content;
+
+  if (!responseText) {
+    throw new Error('Vantero-Response enthält keinen Text.');
+  }
+
+  return responseText;
+}
+
+export async function createTextChatCompletion({
+  maxTokens,
+  signal,
+  system,
+  userText,
+}: TextCompletionOptions): Promise<string> {
+  assertVanteroConfigured();
+
+  const response = await vanteroClient.chat.completions.create(
+    {
+      max_tokens: maxTokens,
+      messages: [
+        {
+          content: system,
+          role: 'system',
+        },
+        {
+          content: userText,
           role: 'user',
         },
       ],

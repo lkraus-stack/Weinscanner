@@ -121,6 +121,382 @@ export type Database = {
           },
         ]
       }
+      restaurant_ai_analyses: {
+        Row: {
+          analysis_version: string
+          confidence: string
+          created_at: string
+          evidence: Json
+          expires_at: string
+          generated_at: string
+          headline: string
+          id: string
+          matching_inventory_item_ids: string[]
+          occasion: string
+          provider_place_id: string
+          reason: string
+          restaurant_id: string
+          result_payload: Json
+          review_signals: string[]
+          role_label: string
+          score: number
+          strengths: string[]
+          user_id: string
+          watchouts: string[]
+          wine_fit: string | null
+        }
+        Insert: {
+          analysis_version?: string
+          confidence: string
+          created_at?: string
+          evidence?: Json
+          expires_at: string
+          generated_at?: string
+          headline: string
+          id?: string
+          matching_inventory_item_ids?: string[]
+          occasion: string
+          provider_place_id: string
+          reason: string
+          restaurant_id: string
+          result_payload?: Json
+          review_signals?: string[]
+          role_label: string
+          score: number
+          strengths?: string[]
+          user_id?: string
+          watchouts?: string[]
+          wine_fit?: string | null
+        }
+        Update: {
+          analysis_version?: string
+          confidence?: string
+          created_at?: string
+          evidence?: Json
+          expires_at?: string
+          generated_at?: string
+          headline?: string
+          id?: string
+          matching_inventory_item_ids?: string[]
+          occasion?: string
+          provider_place_id?: string
+          reason?: string
+          restaurant_id?: string
+          result_payload?: Json
+          review_signals?: string[]
+          role_label?: string
+          score?: number
+          strengths?: string[]
+          user_id?: string
+          watchouts?: string[]
+          wine_fit?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "restaurant_ai_analyses_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      restaurant_ratings: {
+        Row: {
+          created_at: string
+          id: string
+          notes: string | null
+          overall_stars: number
+          restaurant_id: string
+          updated_at: string
+          user_id: string
+          visited_at: string | null
+          wine_stars: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          notes?: string | null
+          overall_stars: number
+          restaurant_id: string
+          updated_at?: string
+          user_id?: string
+          visited_at?: string | null
+          wine_stars: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          notes?: string | null
+          overall_stars?: number
+          restaurant_id?: string
+          updated_at?: string
+          user_id?: string
+          visited_at?: string | null
+          wine_stars?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "restaurant_ratings_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      restaurant_search_cache: {
+        Row: {
+          bounds: Json
+          center_lat: number
+          center_lng: number
+          expires_at: string
+          fetched_at: string
+          filters: Json | null
+          id: string
+          provider: string
+          query_hash: string
+          restaurant_ids: string[]
+        }
+        Insert: {
+          bounds: Json
+          center_lat: number
+          center_lng: number
+          expires_at?: string
+          fetched_at?: string
+          filters?: Json | null
+          id?: string
+          provider: string
+          query_hash: string
+          restaurant_ids?: string[]
+        }
+        Update: {
+          bounds?: Json
+          center_lat?: number
+          center_lng?: number
+          expires_at?: string
+          fetched_at?: string
+          filters?: Json | null
+          id?: string
+          provider?: string
+          query_hash?: string
+          restaurant_ids?: string[]
+        }
+        Relationships: []
+      }
+      restaurant_visits: {
+        Row: {
+          created_at: string
+          id: string
+          inventory_item_id: string | null
+          notes: string | null
+          restaurant_id: string
+          user_id: string
+          visited_at: string
+          vintage_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          inventory_item_id?: string | null
+          notes?: string | null
+          restaurant_id: string
+          user_id?: string
+          visited_at?: string
+          vintage_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          inventory_item_id?: string | null
+          notes?: string | null
+          restaurant_id?: string
+          user_id?: string
+          visited_at?: string
+          vintage_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "restaurant_visits_inventory_item_id_fkey"
+            columns: ["inventory_item_id"]
+            isOneToOne: false
+            referencedRelation: "inventory_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "restaurant_visits_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "restaurant_visits_vintage_id_fkey"
+            columns: ["vintage_id"]
+            isOneToOne: false
+            referencedRelation: "vintages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      restaurant_recommendation_runs: {
+        Row: {
+          analysis_version: string
+          candidate_restaurant_ids: string[]
+          center_lat: number | null
+          center_lng: number | null
+          context_label: string
+          created_at: string
+          expires_at: string
+          filters: Json
+          generated_at: string
+          id: string
+          occasion: string
+          recommendation_payload: Json
+          request_hash: string
+          user_id: string
+        }
+        Insert: {
+          analysis_version?: string
+          candidate_restaurant_ids?: string[]
+          center_lat?: number | null
+          center_lng?: number | null
+          context_label: string
+          created_at?: string
+          expires_at: string
+          filters?: Json
+          generated_at?: string
+          id?: string
+          occasion: string
+          recommendation_payload?: Json
+          request_hash: string
+          user_id?: string
+        }
+        Update: {
+          analysis_version?: string
+          candidate_restaurant_ids?: string[]
+          center_lat?: number | null
+          center_lng?: number | null
+          context_label?: string
+          created_at?: string
+          expires_at?: string
+          filters?: Json
+          generated_at?: string
+          id?: string
+          occasion?: string
+          recommendation_payload?: Json
+          request_hash?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      restaurants: {
+        Row: {
+          city: string | null
+          country: string | null
+          created_at: string
+          cuisine: string | null
+          formatted_address: string | null
+          google_maps_uri: string | null
+          id: string
+          last_fetched_at: string
+          latitude: number
+          longitude: number
+          name: string
+          opening_hours: Json | null
+          phone: string | null
+          photo_refs: Json | null
+          place_types: string[] | null
+          price_level: string | null
+          provider: string
+          provider_place_id: string
+          rating: number | null
+          rating_count: number | null
+          source_payload: Json | null
+          updated_at: string
+          website_url: string | null
+        }
+        Insert: {
+          city?: string | null
+          country?: string | null
+          created_at?: string
+          cuisine?: string | null
+          formatted_address?: string | null
+          google_maps_uri?: string | null
+          id?: string
+          last_fetched_at?: string
+          latitude: number
+          longitude: number
+          name: string
+          opening_hours?: Json | null
+          phone?: string | null
+          photo_refs?: Json | null
+          place_types?: string[] | null
+          price_level?: string | null
+          provider: string
+          provider_place_id: string
+          rating?: number | null
+          rating_count?: number | null
+          source_payload?: Json | null
+          updated_at?: string
+          website_url?: string | null
+        }
+        Update: {
+          city?: string | null
+          country?: string | null
+          created_at?: string
+          cuisine?: string | null
+          formatted_address?: string | null
+          google_maps_uri?: string | null
+          id?: string
+          last_fetched_at?: string
+          latitude?: number
+          longitude?: number
+          name?: string
+          opening_hours?: Json | null
+          phone?: string | null
+          photo_refs?: Json | null
+          place_types?: string[] | null
+          price_level?: string | null
+          provider?: string
+          provider_place_id?: string
+          rating?: number | null
+          rating_count?: number | null
+          source_payload?: Json | null
+          updated_at?: string
+          website_url?: string | null
+        }
+        Relationships: []
+      }
+      saved_restaurants: {
+        Row: {
+          created_at: string
+          id: string
+          restaurant_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          restaurant_id: string
+          user_id?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          restaurant_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "saved_restaurants_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -439,20 +815,20 @@ export type Database = {
           wine_color_filter?: string
         }
         Returns: {
-          country: string
-          grape_variety: string
-          label_image_path: string
-          producer: string
-          rating_id: string
-          rating_stars: number
-          region: string
+          country: string | null
+          grape_variety: string | null
+          label_image_path: string | null
+          producer: string | null
+          rating_id: string | null
+          rating_stars: number | null
+          region: string | null
           scan_id: string
           scanned_at: string
-          vintage_id: string
-          vintage_year: number
-          wine_color: string
-          wine_id: string
-          wine_name: string
+          vintage_id: string | null
+          vintage_year: number | null
+          wine_color: string | null
+          wine_id: string | null
+          wine_name: string | null
         }[]
       }
       reassign_scan_vintage: {
@@ -462,16 +838,21 @@ export type Database = {
       save_scan_atomic: { Args: { payload: Json }; Returns: Json }
       search_wines: {
         Args: {
+          query_grape_variety?: string | null
           query_producer: string
           query_wine_name: string
           similarity_threshold?: number
         }
         Returns: {
           country: string
+          grape_similarity: number
+          grape_variety: string
           id: string
           producer: string
+          producer_similarity: number
           region: string
           similarity: number
+          wine_name_similarity: number
           wine_name: string
         }[]
       }

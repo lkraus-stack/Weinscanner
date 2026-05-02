@@ -14,7 +14,11 @@ export type WineConfidence = {
 export type MinimalWineExtraction = {
   estimated_vintage_year: number | null;
   estimated_vintage_year_reason: string | null;
+  grape_variety: string | null;
+  needs_more_info_reason: string | null;
+  photo_quality: 'good' | 'ok' | 'poor';
   producer: string;
+  visible_text_lines: string[];
   wine_name: string;
   vintage_year: number | null;
   confidence: WineConfidence;
@@ -52,6 +56,11 @@ export type ScanWineResult =
       source: 'low_confidence';
     }
   | {
+      minimal: MinimalWineExtraction;
+      reason: string;
+      source: 'needs_more_info';
+    }
+  | {
       matchedVintage: VintageRecord | null;
       minimal: MinimalWineExtraction;
       source: 'cache';
@@ -78,9 +87,10 @@ export type SaveScanPayload = {
   analysisVintageId?: string | null;
   bottleStoragePath?: string | null;
   corrections: WineCorrection[];
-  imageUrl: string;
-  selectedVintageYear: number;
-  source: 'cache' | 'fresh' | 'manual';
+  existingScanId?: string | null;
+  imageUrl?: string | null;
+  selectedVintageYear: number | null;
+  source: 'cache' | 'draft' | 'fresh' | 'manual';
   storagePath: string;
   vintageData: {
     ai_confidence: number | null;
@@ -102,17 +112,18 @@ export type SaveScanPayload = {
     appellation: string | null;
     country: string | null;
     grape_variety: string | null;
-    producer: string;
+    producer: string | null;
     region: string | null;
     taste_dryness: TasteDryness | null;
     wine_color: WineColor | null;
-    wine_name: string;
+    wine_name: string | null;
   };
   wineId?: string | null;
 };
 
 export type SaveScanResult = {
   scanId: string;
-  vintageId: string;
-  wineId: string;
+  status?: 'draft' | 'saved';
+  vintageId: string | null;
+  wineId: string | null;
 };

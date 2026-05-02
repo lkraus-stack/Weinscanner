@@ -113,6 +113,10 @@ function buildWineTitle(item: HistoryItemRecord | null) {
     return 'Wein bewerten';
   }
 
+  if (item.isDraft || !item.vintageYear) {
+    return 'Scan zu prüfen';
+  }
+
   const baseTitle =
     item.producer === item.wineName
       ? item.producer
@@ -188,6 +192,10 @@ export default function HistoryScreen() {
         throw new Error('Scan fehlt.');
       }
 
+      if (!selectedRatingItem.vintageId) {
+        throw new Error('Dieser Scan braucht zuerst Wein und Jahrgang.');
+      }
+
       if (selectedRating) {
         return updateRating(selectedRating.id, {
           drank_at: value.drankAt,
@@ -230,6 +238,14 @@ export default function HistoryScreen() {
   });
 
   const openRatingModal = useCallback(async (item: HistoryItemRecord) => {
+    if (item.isDraft || !item.vintageId) {
+      router.push({
+        pathname: '/wine-detail',
+        params: { scanId: item.scanId },
+      });
+      return;
+    }
+
     try {
       await Haptics.selectionAsync();
       const existingRating = await getRatingForScan(item.scanId);
@@ -241,7 +257,7 @@ export default function HistoryScreen() {
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       Alert.alert('Bewertung konnte nicht geladen werden', getErrorMessage(error));
     }
-  }, []);
+  }, [router]);
 
   const loadMore = useCallback(() => {
     if (historyQuery.hasNextPage && !historyQuery.isFetchingNextPage) {

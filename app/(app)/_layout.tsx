@@ -66,6 +66,19 @@ export default function AppLayout() {
             }}
           />
           <Tabs.Screen
+            name="discover"
+            options={{
+              title: 'Orte',
+              tabBarIcon: ({ color, focused }) => (
+                <TabBarIcon
+                  color={color}
+                  focused={focused}
+                  name={focused ? 'map' : 'map-outline'}
+                />
+              ),
+            }}
+          />
+          <Tabs.Screen
             name="scan"
             options={{
               title: 'Scan',
@@ -121,6 +134,25 @@ export default function AppLayout() {
             name="wine-detail"
             options={{
               href: null,
+            }}
+          />
+          <Tabs.Screen
+            name="restaurant-detail"
+            options={{
+              href: null,
+            }}
+          />
+          <Tabs.Screen
+            name="restaurant-ai-results"
+            options={{
+              href: null,
+            }}
+          />
+          <Tabs.Screen
+            name="legal"
+            options={{
+              href: null,
+              tabBarStyle: { display: 'none' },
             }}
           />
         </Tabs>

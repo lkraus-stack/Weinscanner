@@ -14,11 +14,13 @@ import {
   extractWineMinimal,
 } from '../_shared/wine-analysis.ts';
 import {
+  type MinimalWineExtraction,
   type WineExtraction,
   validateExtractWineRequest,
 } from '../_shared/wine-schema.ts';
 
 const LOW_CONFIDENCE_THRESHOLD = 0.4;
+const PRODUCT_CONFIDENCE_THRESHOLD = 0.55;
 const PIPELINE_TIMEOUT_MS = 90_000;
 
 type SupabaseServiceClient = ReturnType<typeof createServiceClient>;
@@ -57,6 +59,66 @@ function buildVintageInsert(wineId: string, extraction: WineExtraction) {
     vinification: extraction.vinification,
     vintage_year: extraction.vintage_year,
     wine_id: wineId,
+  };
+}
+
+function buildLabelEvidenceText(minimal: MinimalWineExtraction) {
+  return JSON.stringify(
+    {
+      grape_variety: minimal.grape_variety,
+      needs_more_info_reason: minimal.needs_more_info_reason,
+      photo_quality: minimal.photo_quality,
+      producer: minimal.producer,
+      visible_text_lines: minimal.visible_text_lines,
+      wine_name: minimal.wine_name,
+      vintage_year: minimal.vintage_year,
+    },
+    null,
+    2
+  );
+}
+
+function needsMoreLabelInfo(minimal: MinimalWineExtraction) {
+  if (minimal.photo_quality === 'poor') {
+    return 'Das Foto ist zu unscharf, zu dunkel oder das Etikett ist zu klein.';
+  }
+
+  if (!minimal.producer || minimal.confidence.producer < PRODUCT_CONFIDENCE_THRESHOLD) {
+    return 'Das Weingut ist nicht sicher lesbar.';
+  }
+
+  if (!minimal.wine_name || minimal.confidence.wine_name < PRODUCT_CONFIDENCE_THRESHOLD) {
+    return 'Der konkrete Weinname ist nicht sicher lesbar.';
+  }
+
+  return null;
+}
+
+function preferLabelEvidence(
+  extraction: WineExtraction,
+  minimal: MinimalWineExtraction
+): WineExtraction {
+  return {
+    ...extraction,
+    confidence: {
+      ...extraction.confidence,
+      producer: Math.max(extraction.confidence.producer, minimal.confidence.producer),
+      vintage_year:
+        minimal.vintage_year === null
+          ? extraction.confidence.vintage_year
+          : Math.max(
+              extraction.confidence.vintage_year,
+              minimal.confidence.vintage_year
+            ),
+      wine_name: Math.max(
+        extraction.confidence.wine_name,
+        minimal.confidence.wine_name
+      ),
+    },
+    grape_variety: minimal.grape_variety ?? extraction.grape_variety,
+    producer: minimal.producer || extraction.producer,
+    vintage_year: minimal.vintage_year ?? extraction.vintage_year,
+    wine_name: minimal.wine_name || extraction.wine_name,
   };
 }
 
@@ -116,14 +178,17 @@ serve(async (req) => {
     requirePost(req);
     await requireUser(req);
 
-    const { imageUrl } = validateExtractWineRequest(await req.json());
+    const { imageUrl, secondaryImageUrl } = validateExtractWineRequest(
+      await req.json()
+    );
     const abortController = new AbortController();
     const timeout = setTimeout(() => abortController.abort(), PIPELINE_TIMEOUT_MS);
 
     try {
       const minimal = await extractWineMinimal(
         imageUrl,
-        abortController.signal
+        abortController.signal,
+        secondaryImageUrl
       );
 
       if (minimal.confidence.overall < LOW_CONFIDENCE_THRESHOLD) {
@@ -133,8 +198,19 @@ serve(async (req) => {
         });
       }
 
+      const infoReason = needsMoreLabelInfo(minimal);
+
+      if (infoReason) {
+        return jsonResponse({
+          minimal,
+          reason: infoReason,
+          source: 'needs_more_info',
+        });
+      }
+
       const supabase = createServiceClient();
       const searchResult = await searchWineInDb(supabase, {
+        grapeVariety: minimal.grape_variety,
         producer: minimal.producer,
         vintageYear: minimal.vintage_year,
         wineName: minimal.wine_name,
@@ -153,13 +229,33 @@ serve(async (req) => {
       const extraction = await extractWineFull(
         {
           imageUrl,
+          ocrText: buildLabelEvidenceText(minimal),
+          secondaryImageUrl,
         },
         abortController.signal
       );
-      const persisted = await persistFreshWine(supabase, extraction);
+      const labelAlignedExtraction = preferLabelEvidence(extraction, minimal);
+      const secondSearchResult = await searchWineInDb(supabase, {
+        grapeVariety: labelAlignedExtraction.grape_variety,
+        producer: labelAlignedExtraction.producer,
+        vintageYear: labelAlignedExtraction.vintage_year,
+        wineName: labelAlignedExtraction.wine_name,
+      });
+
+      if (secondSearchResult.found) {
+        return jsonResponse({
+          matchedVintage: secondSearchResult.matchedVintage,
+          minimal,
+          source: 'cache',
+          vintages: secondSearchResult.vintages,
+          wine: secondSearchResult.wine,
+        });
+      }
+
+      const persisted = await persistFreshWine(supabase, labelAlignedExtraction);
 
       return jsonResponse({
-        extraction,
+        extraction: labelAlignedExtraction,
         matchedVintage: persisted.matchedVintage,
         minimal,
         source: 'fresh',

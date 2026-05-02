@@ -338,8 +338,10 @@ function emptyExtractionFromMinimal(
     drinking_window_end: null,
     drinking_window_start: null,
     food_pairing: null,
-    grape_variety: null,
+    grape_variety: minimal.grape_variety,
+    needs_more_info_reason: minimal.needs_more_info_reason,
     notes,
+    photo_quality: minimal.photo_quality,
     price_max_eur: null,
     price_min_eur: null,
     estimated_vintage_year: minimal.estimated_vintage_year,
@@ -350,6 +352,7 @@ function emptyExtractionFromMinimal(
     taste_dryness: null,
     vinification: null,
     vintage_year: minimal.vintage_year,
+    visible_text_lines: minimal.visible_text_lines,
     wine_color: null,
     wine_name: minimal.wine_name,
   };
@@ -374,7 +377,9 @@ function vintageToExtraction(
     drinking_window_start: vintage?.drinking_window_start ?? null,
     food_pairing: vintage?.food_pairing ?? null,
     grape_variety: result.wine.grape_variety,
+    needs_more_info_reason: result.minimal.needs_more_info_reason,
     notes: '',
+    photo_quality: result.minimal.photo_quality,
     price_max_eur: numberOrNull(vintage?.price_max_eur),
     price_min_eur: numberOrNull(vintage?.price_min_eur),
     estimated_vintage_year: result.minimal.estimated_vintage_year,
@@ -385,6 +390,7 @@ function vintageToExtraction(
     taste_dryness: tasteDrynessOrNull(result.wine.taste_dryness),
     vinification: vintage?.vinification ?? null,
     vintage_year: vintage?.vintage_year ?? result.minimal.vintage_year,
+    visible_text_lines: result.minimal.visible_text_lines,
     wine_color: wineColorOrNull(result.wine.wine_color),
     wine_name: result.wine.wine_name,
   };
@@ -401,7 +407,9 @@ function extractionFromScanResult(result: ScanWineResult): WineExtraction {
 
   return emptyExtractionFromMinimal(
     result.minimal,
-    'Die Vorderseite war zu unsicher. Bitte scanne das Rücketikett oder gib die Daten später manuell ein.'
+    result.source === 'needs_more_info'
+      ? result.reason
+      : 'Die Vorderseite war zu unsicher. Bitte scanne das Rücketikett oder gib die Daten später manuell ein.'
   );
 }
 
@@ -419,6 +427,14 @@ function getSourceHint(result: ScanWineResult) {
       description: 'Der Wein wurde neu analysiert und global vorgemerkt.',
       icon: 'sparkles-outline' as const,
       title: 'Wein wurde frisch analysiert',
+    };
+  }
+
+  if (result.source === 'needs_more_info') {
+    return {
+      description: result.reason,
+      icon: 'alert-circle-outline' as const,
+      title: 'Erkennung unsicher',
     };
   }
 
@@ -473,7 +489,11 @@ function getVintageSuggestion(result: ScanWineResult | null): VintageSuggestion 
 }
 
 function getWineId(result: ScanWineResult | null) {
-  if (!result || result.source === 'low_confidence') {
+  if (
+    !result ||
+    result.source === 'low_confidence' ||
+    result.source === 'needs_more_info'
+  ) {
     return null;
   }
 
@@ -481,7 +501,11 @@ function getWineId(result: ScanWineResult | null) {
 }
 
 function getAnalysisVintageId(result: ScanWineResult | null) {
-  if (!result || result.source === 'low_confidence') {
+  if (
+    !result ||
+    result.source === 'low_confidence' ||
+    result.source === 'needs_more_info'
+  ) {
     return null;
   }
 
@@ -489,35 +513,98 @@ function getAnalysisVintageId(result: ScanWineResult | null) {
 }
 
 function getSaveSource(result: ScanWineResult | null): SaveScanPayload['source'] {
-  if (!result || result.source === 'low_confidence') {
-    return 'manual';
-  }
+  return result?.source === 'cache' || result?.source === 'fresh'
+    ? result.source
+    : 'manual';
+}
 
-  return result.source;
+function hasCompleteWineData(extraction: WineExtraction, vintageYear: number | null) {
+  return Boolean(
+    vintageYear !== null &&
+      extraction.producer.trim() &&
+      extraction.wine_name.trim()
+  );
+}
+
+function buildDraftPayload({
+  draftScanId,
+  imageUrl,
+  secondaryStoragePath,
+  storagePath,
+}: {
+  draftScanId: string | null;
+  imageUrl: string;
+  secondaryStoragePath: string | null;
+  storagePath: string;
+}): SaveScanPayload {
+  return {
+    bottleStoragePath: secondaryStoragePath,
+    corrections: [],
+    existingScanId: draftScanId,
+    imageUrl,
+    selectedVintageYear: null,
+    source: 'draft',
+    storagePath,
+    vintageData: {
+      ai_confidence: null,
+      alcohol_percent: null,
+      aromas: [],
+      data_sources: [],
+      description_long: null,
+      description_short: null,
+      drinking_window_end: null,
+      drinking_window_start: null,
+      food_pairing: null,
+      price_max_eur: null,
+      price_min_eur: null,
+      serving_temperature: null,
+      vinification: null,
+    },
+    wineData: {
+      alcohol_percent: null,
+      appellation: null,
+      country: null,
+      grape_variety: null,
+      producer: null,
+      region: null,
+      taste_dryness: null,
+      wine_color: null,
+      wine_name: null,
+    },
+  };
 }
 
 function buildSavePayload({
   corrections,
+  draftScanId,
   extraction,
   imageUrl,
   scanResult,
+  secondaryStoragePath,
   selectedVintageYear,
   storagePath,
 }: {
   corrections: WineCorrection[];
+  draftScanId: string | null;
   extraction: WineExtraction;
   imageUrl: string;
   scanResult: ScanWineResult | null;
-  selectedVintageYear: number;
+  secondaryStoragePath: string | null;
+  selectedVintageYear: number | null;
   storagePath: string;
 }): SaveScanPayload {
+  const source = hasCompleteWineData(extraction, selectedVintageYear)
+    ? getSaveSource(scanResult)
+    : 'draft';
+
   return {
-    analysisVintageId: getAnalysisVintageId(scanResult),
-    bottleStoragePath: null,
+    analysisVintageId: source === 'draft' ? null : getAnalysisVintageId(scanResult),
+    bottleStoragePath: secondaryStoragePath,
     corrections,
+    existingScanId: draftScanId,
     imageUrl,
     selectedVintageYear,
-    source: getSaveSource(scanResult),
+    source,
     storagePath,
     vintageData: {
       ai_confidence: extraction.confidence.overall,
@@ -535,7 +622,7 @@ function buildSavePayload({
       vinification: extraction.vinification,
     },
     wineData: extractionToWineData(extraction),
-    wineId: getWineId(scanResult),
+    wineId: source === 'draft' ? null : getWineId(scanResult),
   };
 }
 
@@ -546,10 +633,16 @@ export default function ScanConfirmScreen() {
   const insets = useSafeAreaInsets();
   const showToast = useToastStore((state) => state.showToast);
   const params = useLocalSearchParams<{
+    draftScanId?: string;
+    secondarySignedUrl?: string;
+    secondaryStoragePath?: string;
     signedUrl?: string;
     storagePath?: string;
   }>();
+  const draftScanIdParam = normalizeParam(params.draftScanId) ?? null;
   const signedUrl = normalizeParam(params.signedUrl);
+  const secondarySignedUrl = normalizeParam(params.secondarySignedUrl);
+  const secondaryStoragePath = normalizeParam(params.secondaryStoragePath) ?? null;
   const storagePath = normalizeParam(params.storagePath);
   const [extraction, setExtraction] = useState<WineExtraction | null>(null);
   const [originalExtraction, setOriginalExtraction] =
@@ -564,9 +657,19 @@ export default function ScanConfirmScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [isEditModalVisible, setIsEditModalVisible] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [draftScanId, setDraftScanId] = useState<string | null>(
+    draftScanIdParam
+  );
+  const [draftError, setDraftError] = useState<string | null>(null);
+  const [isDraftSaving, setIsDraftSaving] = useState(false);
   const [loadingIndex, setLoadingIndex] = useState(0);
   const [retryToken, setRetryToken] = useState(0);
   const analysisRunRef = useRef(0);
+  const draftRunRef = useRef(0);
+
+  useEffect(() => {
+    setDraftScanId(draftScanIdParam);
+  }, [draftScanIdParam]);
 
   useEffect(() => {
     if (!isLoading) {
@@ -581,6 +684,60 @@ export default function ScanConfirmScreen() {
 
     return () => clearInterval(interval);
   }, [isLoading]);
+
+  useEffect(() => {
+    if (!signedUrl || !storagePath || draftScanId) {
+      return;
+    }
+
+    let isMounted = true;
+    const draftRunId = draftRunRef.current + 1;
+    draftRunRef.current = draftRunId;
+
+    async function ensureDraftScan() {
+      try {
+        setIsDraftSaving(true);
+        setDraftError(null);
+        const savedDraft = await saveScan(
+          buildDraftPayload({
+            draftScanId,
+            imageUrl: signedUrl as string,
+            secondaryStoragePath,
+            storagePath: storagePath as string,
+          })
+        );
+
+        if (!isMounted || draftRunId !== draftRunRef.current) return;
+
+        setDraftScanId(savedDraft.scanId);
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ['history'] }),
+          queryClient.invalidateQueries({ queryKey: ['user-stats'] }),
+          queryClient.invalidateQueries({
+            queryKey: ['scan-detail', savedDraft.scanId],
+          }),
+        ]);
+      } catch (error: unknown) {
+        if (!isMounted || draftRunId !== draftRunRef.current) return;
+
+        setDraftError(
+          error instanceof Error
+            ? error.message
+            : 'Entwurf konnte nicht gespeichert werden.'
+        );
+      } finally {
+        if (isMounted && draftRunId === draftRunRef.current) {
+          setIsDraftSaving(false);
+        }
+      }
+    }
+
+    void ensureDraftScan();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [draftScanId, queryClient, secondaryStoragePath, signedUrl, storagePath]);
 
   useEffect(() => {
     let isMounted = true;
@@ -603,7 +760,7 @@ export default function ScanConfirmScreen() {
         setSelectedVintageYear(null);
         setAcceptedVintageSuggestion(null);
 
-        const result = await scanWineFromLabel(signedUrl);
+        const result = await scanWineFromLabel(signedUrl, secondarySignedUrl);
 
         if (!isMounted || analysisRunId !== analysisRunRef.current) return;
 
@@ -633,7 +790,7 @@ export default function ScanConfirmScreen() {
     return () => {
       isMounted = false;
     };
-  }, [retryToken, signedUrl]);
+  }, [retryToken, secondarySignedUrl, signedUrl]);
 
   const labelRows = useMemo(
     () => (extraction ? buildLabelRows(extraction) : []),
@@ -659,21 +816,20 @@ export default function ScanConfirmScreen() {
         : [],
     [acceptedVintageSuggestion, extraction, originalExtraction]
   );
+  const isCompleteWine = Boolean(
+    extraction && hasCompleteWineData(extraction, selectedVintageYear)
+  );
+  const isDraftMode = Boolean(extraction && !isCompleteWine);
   const canSave = Boolean(
-    selectedVintageYear !== null &&
-      extraction?.producer.trim() &&
-      extraction?.wine_name.trim() &&
+    extraction &&
       storagePath &&
       signedUrl &&
+      !isDraftSaving &&
       !isSaving
   );
 
   function goToHistory() {
     router.replace('/(app)');
-  }
-
-  function discardScan() {
-    router.replace('/(app)/scan');
   }
 
   function retryAnalysis() {
@@ -707,7 +863,7 @@ export default function ScanConfirmScreen() {
   }
 
   async function saveConfirmedScan() {
-    if (!extraction || !signedUrl || !storagePath || selectedVintageYear === null) {
+    if (!extraction || !signedUrl || !storagePath) {
       return;
     }
 
@@ -716,15 +872,21 @@ export default function ScanConfirmScreen() {
       const savedScan = await saveScan(
         buildSavePayload({
           corrections,
+          draftScanId,
           extraction,
           imageUrl: signedUrl,
           scanResult,
+          secondaryStoragePath,
           selectedVintageYear,
           storagePath,
         })
       );
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      showToast('Wein gespeichert');
+      showToast(
+        savedScan.vintageId
+          ? 'Wein gespeichert'
+          : 'Scan als Entwurf gespeichert'
+      );
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['history'] }),
         queryClient.invalidateQueries({ queryKey: ['user-stats'] }),
@@ -753,6 +915,9 @@ export default function ScanConfirmScreen() {
     router.replace({
       pathname: '/(app)/scan',
       params: {
+        primarySignedUrl: signedUrl ?? '',
+        primaryStoragePath: storagePath ?? '',
+        draftScanId: draftScanId ?? '',
         scanTarget: 'back-label',
       },
     });
@@ -795,9 +960,14 @@ export default function ScanConfirmScreen() {
             <Ionicons name="warning-outline" size={42} color={colors.error} />
             <Text style={styles.centerTitle}>Analyse fehlgeschlagen</Text>
             <Text style={styles.centerDescription}>{errorMessage}</Text>
+            {draftScanId ? (
+              <Text style={styles.centerDescription}>
+                Das Foto ist als Entwurf im Verlauf gespeichert.
+              </Text>
+            ) : null}
             <View style={styles.errorActions}>
               <Pressable onPress={goToHistory} style={styles.secondaryButton}>
-                <Text style={styles.secondaryButtonText}>Abbrechen</Text>
+                <Text style={styles.secondaryButtonText}>Zum Verlauf</Text>
               </Pressable>
               <Pressable onPress={retryAnalysis} style={styles.primaryButton}>
                 <Text style={styles.primaryButtonText}>Erneut versuchen</Text>
@@ -822,7 +992,14 @@ export default function ScanConfirmScreen() {
               <Text style={styles.eyebrow}>Erkannter Wein</Text>
               <Text style={styles.title}>{buildTitle(extraction)}</Text>
               <View style={styles.summaryActions}>
-                <ConfidenceBadge score={extraction.confidence.overall} />
+                <ConfidenceBadge
+                  score={
+                    scanResult?.source === 'needs_more_info' ||
+                    scanResult?.source === 'low_confidence'
+                      ? Math.min(extraction.confidence.overall, 0.59)
+                      : extraction.confidence.overall
+                  }
+                />
                 <Pressable onPress={openEditModal} style={styles.editButton}>
                   <Ionicons
                     name="create-outline"
@@ -836,8 +1013,17 @@ export default function ScanConfirmScreen() {
 
             {scanResult ? <SourceHint result={scanResult} /> : null}
 
+            {isDraftMode || isDraftSaving || draftError ? (
+              <DraftNotice
+                errorMessage={draftError}
+                isSaving={isDraftSaving}
+                isStored={Boolean(draftScanId)}
+              />
+            ) : null}
+
             <Section title="Jahrgang">
               <VintageYearPicker
+                allowEmpty
                 knownYears={knownYears}
                 onAcceptSuggestion={acceptVintageSuggestion}
                 onChange={changeVintageYear}
@@ -856,12 +1042,16 @@ export default function ScanConfirmScreen() {
                     size={24}
                     color={colors.primaryDark}
                   />
-                  <Text style={styles.vintageWarningTitle}>Jahrgang fehlt</Text>
+                  <Text style={styles.vintageWarningTitle}>
+                    {scanResult?.source === 'needs_more_info'
+                      ? 'Mehr Informationen nötig'
+                      : 'Jahrgang fehlt'}
+                  </Text>
                 </View>
                 <Text style={styles.vintageWarningText}>
-                  Auf dem vorderen Etikett ist kein Jahrgang sicher sichtbar.
-                  Du kannst eine Schätzung bestätigen, manuell ein Jahr wählen
-                  oder das Rücketikett für mehr Sicherheit scannen.
+                  {scanResult?.source === 'needs_more_info'
+                    ? 'Die Erkennung ist noch nicht sicher genug. Scanne eine zweite Ansicht oder prüfe die Daten manuell.'
+                    : 'Auf dem vorderen Etikett ist kein Jahrgang sicher sichtbar. Du kannst eine Schätzung bestätigen, manuell ein Jahr wählen oder das Rücketikett für mehr Sicherheit scannen.'}
                 </Text>
                 <Pressable
                   onPress={scanBackLabel}
@@ -956,18 +1146,20 @@ export default function ScanConfirmScreen() {
             ) : null}
 
             <View style={styles.actions}>
-              <Pressable onPress={discardScan} style={styles.secondaryButton}>
-                <Text style={styles.secondaryButtonText}>Verwerfen</Text>
+              <Pressable onPress={goToHistory} style={styles.secondaryButton}>
+                <Text style={styles.secondaryButtonText}>Später prüfen</Text>
               </Pressable>
               <Pressable
                 disabled={!canSave}
                 onPress={saveConfirmedScan}
                 style={[styles.primaryButton, !canSave && styles.disabledButton]}
               >
-                {isSaving ? (
+                {isSaving || isDraftSaving ? (
                   <ActivityIndicator color={colors.white} />
                 ) : (
-                  <Text style={styles.primaryButtonText}>Wein speichern</Text>
+                  <Text style={styles.primaryButtonText}>
+                    {isDraftMode ? 'Scan speichern' : 'Wein speichern'}
+                  </Text>
                 )}
               </Pressable>
             </View>
@@ -1014,6 +1206,47 @@ function SourceHint({ result }: { result: ScanWineResult }) {
       <View style={styles.sourceHintText}>
         <Text style={styles.sourceHintTitle}>{hint.title}</Text>
         <Text style={styles.sourceHintDescription}>{hint.description}</Text>
+      </View>
+    </View>
+  );
+}
+
+function DraftNotice({
+  errorMessage,
+  isSaving,
+  isStored,
+}: {
+  errorMessage: string | null;
+  isSaving: boolean;
+  isStored: boolean;
+}) {
+  const { colors, styles } = useScanConfirmStyles();
+  const icon: keyof typeof Ionicons.glyphMap = errorMessage
+    ? 'alert-circle-outline'
+    : isStored
+      ? 'checkmark-circle-outline'
+      : 'cloud-upload-outline';
+  const iconColor = errorMessage
+    ? colors.error
+    : isStored
+      ? colors.success
+      : colors.primaryDark;
+
+  return (
+    <View style={styles.draftNotice}>
+      <Ionicons name={icon} size={22} color={iconColor} />
+      <View style={styles.sourceHintText}>
+        <Text style={styles.draftNoticeTitle}>
+          {errorMessage
+            ? 'Entwurf noch nicht gespeichert'
+            : isSaving
+              ? 'Scan wird gesichert'
+              : 'Scan bleibt gespeichert'}
+        </Text>
+        <Text style={styles.sourceHintDescription}>
+          {errorMessage ??
+            'Auch wenn Daten fehlen, bleibt das Foto im Verlauf und kann später ergänzt werden.'}
+        </Text>
       </View>
     </View>
   );
@@ -1070,6 +1303,22 @@ function makeStyles(colors: ThemeColors) {
   },
   disabledButton: {
     opacity: 0.45,
+  },
+  draftNotice: {
+    alignItems: 'flex-start',
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: spacing.md,
+    marginTop: spacing.md,
+    padding: spacing.lg,
+  },
+  draftNoticeTitle: {
+    color: colors.text,
+    fontSize: typography.size.base,
+    fontWeight: typography.weight.extraBold,
   },
   editButton: {
     alignItems: 'center',

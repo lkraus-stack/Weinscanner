@@ -313,6 +313,9 @@ max_frequency = "5s"
 # `discord`, `facebook`, `github`, `gitlab`, `google`, `keycloak`, `linkedin_oidc`, `notion`, `twitch`,
 # `twitter`, `x`, `slack`, `spotify`, `workos`, `zoom`.
 [auth.external.apple]
+# Production Apple Sign-In is configured in the hosted Supabase dashboard.
+# Native iOS uses the app bundle identifier as client ID:
+# com.francoconsulting.winescanner
 enabled = false
 client_id = ""
 # DO NOT commit your OAuth provider secret to git. Use environment variable substitution instead:
@@ -377,6 +380,9 @@ deno_version = 2
 
 # [edge_runtime.secrets]
 # secret_key = "env(SECRET_VALUE)"
+
+[functions.restaurant-photo]
+verify_jwt = false
 
 [analytics]
 enabled = true

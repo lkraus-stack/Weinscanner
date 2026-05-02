@@ -17,6 +17,7 @@ import { typography } from '@/theme/typography';
 export type VintageSuggestionKind = 'recognized' | 'estimated';
 
 type Props = {
+  allowEmpty?: boolean;
   knownYears?: number[];
   maxYear?: number;
   minYear?: number;
@@ -40,6 +41,7 @@ function uniqueYears(years: number[], minYear: number, maxYear: number) {
 }
 
 export function VintageYearPicker({
+  allowEmpty = false,
   knownYears = [],
   maxYear = new Date().getFullYear() + 1,
   minYear = 1900,
@@ -112,8 +114,10 @@ export function VintageYearPicker({
     <View style={styles.card}>
       <View style={styles.headerRow}>
         <View>
-          <Text style={styles.title}>Jahrgang*</Text>
-          <Text style={styles.requiredText}>Pflichtfeld</Text>
+          <Text style={styles.title}>Jahrgang{allowEmpty ? '' : '*'}</Text>
+          <Text style={[styles.requiredText, allowEmpty && styles.optionalText]}>
+            {allowEmpty ? 'Optional' : 'Pflichtfeld'}
+          </Text>
         </View>
         {value ? (
           <Pressable onPress={() => onChange(null)} style={styles.clearButton}>
@@ -125,10 +129,13 @@ export function VintageYearPicker({
       <Pressable
         accessibilityLabel="Jahrgang auswählen"
         onPress={() => setIsPickerOpen(true)}
-        style={[styles.selectBox, !value && styles.selectBoxMissing]}
+        style={[
+          styles.selectBox,
+          !value && !allowEmpty && styles.selectBoxMissing,
+        ]}
       >
         <Text style={[styles.selectText, !value && styles.placeholderText]}>
-          {value ? String(value) : 'Bitte auswählen'}
+          {value ? String(value) : allowEmpty ? 'Offen lassen' : 'Bitte auswählen'}
         </Text>
         <Ionicons name="chevron-down" size={20} color={colors.textSecondary} />
       </Pressable>
@@ -190,9 +197,15 @@ export function VintageYearPicker({
 
       {!value ? (
         <View style={styles.missingHint}>
-          <Ionicons name="warning-outline" size={18} color={colors.warning} />
+          <Ionicons
+            name={allowEmpty ? 'information-circle-outline' : 'warning-outline'}
+            size={18}
+            color={allowEmpty ? colors.primaryDark : colors.warning}
+          />
           <Text style={styles.missingHintText}>
-            Wähle den Jahrgang aktiv aus, bevor du den Wein speicherst.
+            {allowEmpty
+              ? 'Du kannst den Scan ohne Jahrgang speichern und später ergänzen.'
+              : 'Wähle den Jahrgang aktiv aus, bevor du den Wein speicherst.'}
           </Text>
         </View>
       ) : null}
@@ -447,6 +460,9 @@ function makeStyles(colors: ThemeColors) {
   },
   pillTextSelected: {
     color: colors.white,
+  },
+  optionalText: {
+    color: colors.textSecondary,
   },
   pills: {
     flexDirection: 'row',

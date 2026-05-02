@@ -1,7 +1,8 @@
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
-import { getAromaIcon } from '@/lib/aroma-icons';
+import { getAromaVisual } from '@/lib/aroma-icons';
 import { radii, spacing } from '@/theme/spacing';
 import { useTheme, type ThemeColors } from '@/theme/ThemeProvider';
 import { typography } from '@/theme/typography';
@@ -21,11 +22,20 @@ export function AromaGrid({ aromas }: Props) {
   return (
     <View style={styles.grid}>
       {aromas.map((aroma) => (
-        <View key={aroma} style={styles.card}>
-          <Text style={styles.icon}>{getAromaIcon(aroma)}</Text>
-          <Text style={styles.label} numberOfLines={2}>
-            {aroma}
-          </Text>
+        <View key={aroma} style={styles.chip}>
+          <View style={styles.iconShell}>
+            <Ionicons
+              name={getAromaVisual(aroma).icon}
+              size={18}
+              color={colors.primaryDark}
+            />
+          </View>
+          <View style={styles.copy}>
+            <Text style={styles.category}>{getAromaVisual(aroma).category}</Text>
+            <Text style={styles.label} numberOfLines={2}>
+              {aroma}
+            </Text>
+          </View>
         </View>
       ))}
     </View>
@@ -34,38 +44,50 @@ export function AromaGrid({ aromas }: Props) {
 
 function makeStyles(colors: ThemeColors) {
   return StyleSheet.create({
-  card: {
+  category: {
+    color: colors.textSecondary,
+    fontSize: typography.size.xs,
+    fontWeight: typography.weight.bold,
+  },
+  chip: {
     alignItems: 'center',
-    backgroundColor: colors.surface,
+    backgroundColor: colors.surfaceWarm,
     borderColor: colors.border,
-    borderRadius: radii.md,
+    borderRadius: radii.pill,
     borderWidth: 1,
+    flexBasis: '47%',
+    flexDirection: 'row',
+    flexGrow: 1,
     gap: spacing.sm,
-    justifyContent: 'center',
-    minHeight: 96,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.md,
-    shadowColor: colors.shadow,
-    shadowOffset: { height: 4, width: 0 },
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    width: '30.5%',
+    minHeight: 62,
+    minWidth: 142,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  copy: {
+    flex: 1,
+    gap: 2,
   },
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: spacing.md,
   },
-  icon: {
-    fontSize: 28,
-    lineHeight: 34,
+  iconShell: {
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: radii.pill,
+    borderWidth: 1,
+    height: 36,
+    justifyContent: 'center',
+    width: 36,
   },
   label: {
     color: colors.text,
-    fontSize: typography.size.sm,
+    fontSize: typography.size.md,
     fontWeight: typography.weight.extraBold,
-    lineHeight: typography.lineHeight.sm,
-    textAlign: 'center',
+    lineHeight: typography.lineHeight.md,
   },
   });
 }

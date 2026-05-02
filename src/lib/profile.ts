@@ -9,10 +9,24 @@ export type ProfileRecord = Tables<'profiles'>;
 
 export type ThemePreference = 'auto' | 'dark' | 'light';
 
+export type RestaurantDiscoveryPreferences = {
+  cuisine_type: string | null;
+  last_city: string | null;
+  last_map_center: {
+    lat: number;
+    lng: number;
+  } | null;
+  min_rating: number | null;
+  open_now: boolean;
+  preferred_view: 'list' | 'map';
+  radius_meters: number;
+};
+
 export type UserPreferences = {
   hide_empty_inventory: boolean;
   language: 'de';
   notifications_enabled: boolean;
+  restaurant_discovery: RestaurantDiscoveryPreferences;
   theme: ThemePreference;
 };
 
@@ -30,6 +44,15 @@ export const DEFAULT_USER_PREFERENCES: UserPreferences = {
   hide_empty_inventory: false,
   language: 'de',
   notifications_enabled: false,
+  restaurant_discovery: {
+    cuisine_type: null,
+    last_city: null,
+    last_map_center: null,
+    min_rating: null,
+    open_now: false,
+    preferred_view: 'map',
+    radius_meters: 5000,
+  },
   theme: 'auto',
 };
 
@@ -61,6 +84,64 @@ function normalizeTheme(value: unknown): ThemePreference {
   return DEFAULT_USER_PREFERENCES.theme;
 }
 
+function normalizeMapCenter(value: unknown) {
+  if (!isRecord(value)) {
+    return DEFAULT_USER_PREFERENCES.restaurant_discovery.last_map_center;
+  }
+
+  const lat = typeof value.lat === 'number' ? value.lat : null;
+  const lng = typeof value.lng === 'number' ? value.lng : null;
+
+  if (lat === null || lng === null) {
+    return DEFAULT_USER_PREFERENCES.restaurant_discovery.last_map_center;
+  }
+
+  if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+    return DEFAULT_USER_PREFERENCES.restaurant_discovery.last_map_center;
+  }
+
+  return { lat, lng };
+}
+
+function normalizeMinRating(value: unknown) {
+  return value === 4 || value === 4.5
+    ? value
+    : DEFAULT_USER_PREFERENCES.restaurant_discovery.min_rating;
+}
+
+function normalizeRadiusMeters(value: unknown) {
+  return value === 1000 || value === 5000 || value === 10000 || value === 25000
+    ? value
+    : DEFAULT_USER_PREFERENCES.restaurant_discovery.radius_meters;
+}
+
+function normalizeRestaurantDiscoveryPreferences(
+  value: unknown
+): RestaurantDiscoveryPreferences {
+  if (!isRecord(value)) {
+    return DEFAULT_USER_PREFERENCES.restaurant_discovery;
+  }
+
+  return {
+    cuisine_type:
+      typeof value.cuisine_type === 'string' && value.cuisine_type.trim()
+        ? value.cuisine_type.trim()
+        : DEFAULT_USER_PREFERENCES.restaurant_discovery.cuisine_type,
+    last_city:
+      typeof value.last_city === 'string' && value.last_city.trim()
+        ? value.last_city.trim()
+        : DEFAULT_USER_PREFERENCES.restaurant_discovery.last_city,
+    last_map_center: normalizeMapCenter(value.last_map_center),
+    min_rating: normalizeMinRating(value.min_rating),
+    open_now:
+      typeof value.open_now === 'boolean'
+        ? value.open_now
+        : DEFAULT_USER_PREFERENCES.restaurant_discovery.open_now,
+    preferred_view: value.preferred_view === 'list' ? 'list' : 'map',
+    radius_meters: normalizeRadiusMeters(value.radius_meters),
+  };
+}
+
 export function normalizePreferences(value: Json | null): UserPreferences {
   if (!isRecord(value)) {
     return DEFAULT_USER_PREFERENCES;
@@ -76,6 +157,9 @@ export function normalizePreferences(value: Json | null): UserPreferences {
       typeof value.notifications_enabled === 'boolean'
         ? value.notifications_enabled
         : DEFAULT_USER_PREFERENCES.notifications_enabled,
+    restaurant_discovery: normalizeRestaurantDiscoveryPreferences(
+      value.restaurant_discovery
+    ),
     theme: normalizeTheme(value.theme),
   };
 }
@@ -128,7 +212,7 @@ export async function getProfile(): Promise<ProfileWithAvatar> {
   };
 }
 
-async function ensureProfile(): Promise<ProfileRecord> {
+export async function ensureProfile(): Promise<ProfileRecord> {
   const { data, error } = await supabase.rpc('ensure_profile');
 
   assertProfileError(error);

@@ -23,14 +23,17 @@ serve(async (req) => {
     requirePost(req);
     await requireUser(req);
 
-    const { imageUrl } = validateExtractWineRequest(await req.json());
+    const { imageUrl, secondaryImageUrl } = validateExtractWineRequest(
+      await req.json()
+    );
     const abortController = new AbortController();
     const timeout = setTimeout(() => abortController.abort(), VANTERO_TIMEOUT_MS);
 
     try {
       const extraction = await extractWineMinimal(
         imageUrl,
-        abortController.signal
+        abortController.signal,
+        secondaryImageUrl
       );
 
       return jsonResponse(extraction);

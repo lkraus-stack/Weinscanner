@@ -5,6 +5,7 @@ type ExpoExtra = {
   supabaseAnonKey?: unknown;
   privacyUrl?: unknown;
   imprintUrl?: unknown;
+  googleMapsIosKey?: unknown;
 };
 
 const extra = Constants.expoConfig?.extra as ExpoExtra | undefined;
@@ -25,6 +26,7 @@ export const env = {
   ),
   PRIVACY_URL: optional(extra?.privacyUrl),
   IMPRINT_URL: optional(extra?.imprintUrl),
+  GOOGLE_MAPS_IOS_KEY: optional(extra?.googleMapsIosKey),
 } as const;
 
 function optional(value: unknown): string | null {

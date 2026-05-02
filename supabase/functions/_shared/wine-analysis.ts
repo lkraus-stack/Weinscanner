@@ -20,7 +20,7 @@ function parseVanteroJson(responseText: string, label: string) {
 
 function buildFullUserText({ ocrText }: ExtractWineRequest) {
   if (ocrText) {
-    return `Erkannter Text auf dem Etikett:\n${ocrText}\n\nAnalysiere zusätzlich das Bild.`;
+    return `Verbindliche Label-Evidenz aus der ersten Analyse:\n${ocrText}\n\nAnalysiere zusätzlich das Bild. Sichtbare Label-Evidenz darf durch Weinwissen nicht überschrieben werden.`;
   }
 
   return 'Analysiere das Wein-Etikett auf dem Bild.';
@@ -33,6 +33,7 @@ export async function extractWineFull(
   const responseText = await createVisionChatCompletion({
     imageUrl: payload.imageUrl,
     maxTokens: 4000,
+    secondaryImageUrl: payload.secondaryImageUrl,
     signal,
     system: FULL_WINE_PROMPT,
     userText: buildFullUserText(payload),
@@ -41,13 +42,19 @@ export async function extractWineFull(
   return validateWineExtraction(parseVanteroJson(responseText, 'Vollanalyse'));
 }
 
-export async function extractWineMinimal(imageUrl: string, signal: AbortSignal) {
+export async function extractWineMinimal(
+  imageUrl: string,
+  signal: AbortSignal,
+  secondaryImageUrl?: string
+) {
   const responseText = await createVisionChatCompletion({
     imageUrl,
     maxTokens: 2000,
+    secondaryImageUrl,
     signal,
     system: MINIMAL_WINE_PROMPT,
-    userText: 'Erkenne nur Producer, Wein-Name und Jahrgang vom Etikett.',
+    userText:
+      'Extrahiere nur sichtbare Label-Evidenz. Keine Weinwissen-Anreicherung und keine Sortiments-Vermutung.',
   });
 
   return validateMinimalWineExtraction(

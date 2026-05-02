@@ -11,6 +11,7 @@ import {
 import { searchWineInDb } from '../_shared/search.ts';
 
 type SearchWineRequest = {
+  grapeVariety?: string | null;
   producer: string;
   vintageYear?: number | null;
   wineName: string;
@@ -32,6 +33,10 @@ function validateSearchWineRequest(value: unknown): SearchWineRequest {
   }
 
   return {
+    grapeVariety:
+      typeof record.grapeVariety === 'string' && record.grapeVariety.trim()
+        ? record.grapeVariety.trim()
+        : null,
     producer: record.producer.trim(),
     vintageYear:
       typeof record.vintageYear === 'number'

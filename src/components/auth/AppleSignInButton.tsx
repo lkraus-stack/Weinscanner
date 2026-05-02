@@ -1,7 +1,9 @@
+import * as Sentry from '@sentry/react-native';
 import * as AppleAuthentication from 'expo-apple-authentication';
-import { useState } from 'react';
-import { Alert, Platform, StyleSheet, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Alert, StyleSheet, View } from 'react-native';
 
+import { ensureProfile } from '@/lib/profile';
 import { supabase } from '@/lib/supabase';
 import { useTheme } from '@/theme/ThemeProvider';
 
@@ -21,15 +23,114 @@ function getErrorMessage(error: unknown) {
   return 'Bitte versuche es noch einmal.';
 }
 
+function getFormattedFullName(
+  fullName: AppleAuthentication.AppleAuthenticationCredential['fullName']
+) {
+  if (!fullName) {
+    return null;
+  }
+
+  try {
+    const formattedName = AppleAuthentication.formatFullName(
+      fullName,
+      'default'
+    ).trim();
+
+    if (formattedName) {
+      return formattedName;
+    }
+  } catch {
+    // Some non-device runtimes can miss the native formatter.
+  }
+
+  const fallbackName = [
+    fullName.givenName,
+    fullName.middleName,
+    fullName.familyName,
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .trim();
+
+  return fallbackName || null;
+}
+
+async function saveAppleProfileMetadata(
+  credential: AppleAuthentication.AppleAuthenticationCredential
+) {
+  const fullName = getFormattedFullName(credential.fullName);
+
+  if (
+    !fullName &&
+    !credential.fullName?.givenName &&
+    !credential.fullName?.familyName
+  ) {
+    return;
+  }
+
+  const metadata: Record<string, string> = {};
+
+  if (fullName) {
+    metadata.full_name = fullName;
+  }
+
+  if (credential.fullName?.givenName) {
+    metadata.given_name = credential.fullName.givenName;
+  }
+
+  if (credential.fullName?.familyName) {
+    metadata.family_name = credential.fullName.familyName;
+  }
+
+  const { error } = await supabase.auth.updateUser({
+    data: metadata,
+  });
+
+  if (error) {
+    throw error;
+  }
+}
+
 export function AppleSignInButton() {
   const { resolved } = useTheme();
+  const [isAvailable, setIsAvailable] = useState(false);
+  const [hasCheckedAvailability, setHasCheckedAvailability] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
-  if (Platform.OS !== 'ios') {
+  useEffect(() => {
+    let isMounted = true;
+
+    AppleAuthentication.isAvailableAsync()
+      .then((available) => {
+        if (!isMounted) return;
+
+        setIsAvailable(available);
+      })
+      .catch(() => {
+        if (!isMounted) return;
+
+        setIsAvailable(false);
+      })
+      .finally(() => {
+        if (!isMounted) return;
+
+        setHasCheckedAvailability(true);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  if (!hasCheckedAvailability || !isAvailable) {
     return null;
   }
 
   async function handlePress() {
+    if (isLoading) {
+      return;
+    }
+
     try {
       setIsLoading(true);
 
@@ -52,11 +153,19 @@ export function AppleSignInButton() {
       if (error) {
         throw error;
       }
+
+      await saveAppleProfileMetadata(credential);
+      await ensureProfile();
     } catch (error: unknown) {
       if (getErrorCode(error) === 'ERR_REQUEST_CANCELED') {
         return;
       }
 
+      Sentry.captureException(error, {
+        tags: {
+          auth_provider: 'apple',
+        },
+      });
       Alert.alert('Apple Login fehlgeschlagen', getErrorMessage(error));
     } finally {
       setIsLoading(false);

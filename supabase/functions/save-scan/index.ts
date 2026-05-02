@@ -11,7 +11,7 @@ import {
   requireUser,
 } from '../_shared/http.ts';
 
-type SaveSource = 'cache' | 'fresh' | 'manual';
+type SaveSource = 'cache' | 'draft' | 'fresh' | 'manual';
 
 const WINE_COLORS = new Set(['weiss', 'rot', 'rose', 'schaum', 'suess']);
 const TASTE_DRYNESS = new Set(['trocken', 'halbtrocken', 'lieblich', 'suess']);
@@ -46,9 +46,13 @@ function stringArray(value: unknown, maxItems = 12): string[] {
     .slice(0, maxItems);
 }
 
-function validateYear(value: unknown) {
+function validateYear(value: unknown, required = true) {
   const year = numberOrNull(value);
   const maxYear = new Date().getFullYear() + 1;
+
+  if (year === null && !required) {
+    return null;
+  }
 
   if (year === null || !Number.isInteger(year) || year < 1900 || year > maxYear) {
     throw new Error('Bitte wähle einen gültigen Jahrgang.');
@@ -58,7 +62,12 @@ function validateYear(value: unknown) {
 }
 
 function validateSource(value: unknown): SaveSource {
-  if (value === 'cache' || value === 'fresh' || value === 'manual') {
+  if (
+    value === 'cache' ||
+    value === 'draft' ||
+    value === 'fresh' ||
+    value === 'manual'
+  ) {
     return value;
   }
 
@@ -140,8 +149,11 @@ function validateSaveScanRequest(value: unknown) {
     throw new Error('Ungültiger Request.');
   }
 
-  const selectedVintageYear = validateYear(value.selectedVintageYear);
   const source = validateSource(value.source);
+  const selectedVintageYear = validateYear(
+    value.selectedVintageYear,
+    source !== 'draft'
+  );
   const storagePath = stringOrNull(value.storagePath);
 
   if (!storagePath) {
@@ -150,10 +162,7 @@ function validateSaveScanRequest(value: unknown) {
 
   const wineData = validateWineData(value.wineData);
 
-  if (
-    source === 'manual' &&
-    (!wineData.producer || !wineData.wine_name)
-  ) {
+  if (source === 'manual' && (!wineData.producer || !wineData.wine_name)) {
     throw new Error('Weingut und Weinname sind Pflichtfelder.');
   }
 
@@ -165,11 +174,15 @@ function validateSaveScanRequest(value: unknown) {
     analysisVintageId: stringOrNull(value.analysisVintageId),
     bottleStoragePath: stringOrNull(value.bottleStoragePath),
     corrections: validateCorrections(value.corrections),
+    existingScanId: stringOrNull(value.existingScanId),
     imageUrl: stringOrNull(value.imageUrl),
     selectedVintageYear,
     source,
     storagePath,
-    vintageData: validateVintageData(value.vintageData, selectedVintageYear),
+    vintageData:
+      selectedVintageYear === null
+        ? {}
+        : validateVintageData(value.vintageData, selectedVintageYear),
     wineData,
     wineId: stringOrNull(value.wineId),
   };

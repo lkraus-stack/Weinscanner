@@ -59,6 +59,10 @@ export const HistoryItem = memo(function HistoryItem({
   const colorLabel = item.wineColor ? COLOR_LABELS[item.wineColor] : 'Unklar';
   const swatchStyle = { backgroundColor: getSwatchColor(colors, item.wineColor) };
   const hasRating = typeof item.ratingStars === 'number';
+  const title = item.isDraft
+    ? 'Scan zu prüfen'
+    : [item.producer, item.wineName].filter(Boolean).join(' ');
+  const yearLabel = item.vintageYear ? String(item.vintageYear) : 'Offen';
   const entering = animateEntry
     ? FadeIn.delay(Math.min(animationIndex, 8) * 50).duration(300)
     : undefined;
@@ -104,12 +108,18 @@ export const HistoryItem = memo(function HistoryItem({
         <View style={styles.content}>
           <View style={styles.titleRow}>
             <Text style={styles.title} numberOfLines={2}>
-              {item.producer} {item.wineName}
+              {title || 'Unbekannter Wein'}
             </Text>
-            <Text style={styles.year}>{item.vintageYear}</Text>
+            <Text style={[styles.year, item.isDraft && styles.draftYear]}>
+              {yearLabel}
+            </Text>
           </View>
 
-          {regionLine ? (
+          {item.isDraft ? (
+            <Text style={styles.meta} numberOfLines={1}>
+              Foto gespeichert, Details fehlen noch
+            </Text>
+          ) : regionLine ? (
             <Text style={styles.meta} numberOfLines={1}>
               {regionLine}
             </Text>
@@ -129,9 +139,11 @@ export const HistoryItem = memo(function HistoryItem({
                   swatchStyle,
                 ]}
               />
-              <Text style={styles.colorLabel}>{colorLabel}</Text>
+              <Text style={styles.colorLabel}>
+                {item.isDraft ? 'Zu prüfen' : colorLabel}
+              </Text>
             </View>
-            {!hasRating ? (
+            {!item.isDraft && !hasRating ? (
               <Pressable
                 accessibilityRole="button"
                 onPress={(event) => {
@@ -189,6 +201,10 @@ function makeStyles(colors: ThemeColors) {
     gap: spacing.xs,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs,
+  },
+  draftYear: {
+    color: colors.textSecondary,
+    fontSize: typography.size.md,
   },
   content: {
     flex: 1,

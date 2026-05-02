@@ -27,15 +27,15 @@ type HistoryRow = {
   country: string | null;
   grape_variety: string | null;
   label_image_path: string | null;
-  producer: string;
+  producer: string | null;
   region: string | null;
   scan_id: string;
   scanned_at: string;
-  vintage_id: string;
-  vintage_year: number;
+  vintage_id: string | null;
+  vintage_year: number | null;
   wine_color: string | null;
-  wine_id: string;
-  wine_name: string;
+  wine_id: string | null;
+  wine_name: string | null;
 };
 
 const ENV_PATH = resolve(process.cwd(), '.env.test');
@@ -282,6 +282,42 @@ async function invokeSaveScan(
   throw new Error(lastErrorText);
 }
 
+async function invokeDraftSaveScan(
+  env: TestEnv,
+  accessToken: string,
+  storagePath: string
+) {
+  const response = await fetch(`${env.SUPABASE_URL}/functions/v1/save-scan`, {
+    body: JSON.stringify({
+      corrections: [],
+      selectedVintageYear: null,
+      source: 'draft',
+      storagePath,
+      vintageData: {},
+      wineData: {},
+    }),
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      apikey: env.SUPABASE_ANON_KEY,
+      'Content-Type': 'application/json',
+    },
+    method: 'POST',
+  });
+  const responseText = await response.text();
+
+  if (!response.ok) {
+    throw new Error(
+      `draft save-scan returned ${response.status} ${response.statusText}: ${responseText}`
+    );
+  }
+
+  return JSON.parse(responseText) as {
+    scanId: string;
+    vintageId: string | null;
+    wineId: string | null;
+  };
+}
+
 async function queryHistory(
   client: SupabaseClient,
   args: {
@@ -348,6 +384,7 @@ function printMissingSteps(steps: Step[]) {
     'Anon-Logins erfolgreich',
     'Testbild hochgeladen',
     '25 Scans ueber save-scan erstellt',
+    'Draft-Scan im Verlauf sichtbar',
     'Page 1 und Page 2 paginieren korrekt',
     'Suche trifft Producer, Wein und Region',
     'Weinfarben-Filter trifft korrekt',
@@ -429,12 +466,30 @@ async function runHistoryTest() {
 
     record(steps, '25 Scans ueber save-scan erstellt', true);
 
+    const draftResult = await invokeDraftSaveScan(
+      env,
+      session.access_token,
+      upload.storagePath
+    );
+    const draftRows = await queryHistory(client, { pageLimit: 50, pageOffset: 0 });
+    const draftVisible = draftRows.some(
+      (row) =>
+        row.scan_id === draftResult.scanId &&
+        row.vintage_id === null &&
+        row.wine_id === null
+    );
+    record(steps, 'Draft-Scan im Verlauf sichtbar', draftVisible);
+
+    if (!draftVisible) {
+      throw new Error('Draft-Scan fehlt im Verlauf.');
+    }
+
     const pageOne = await queryHistory(client, { pageLimit: 20, pageOffset: 0 });
     const pageTwo = await queryHistory(client, { pageLimit: 20, pageOffset: 20 });
     const paginationOk =
       pageOne.length === 20 &&
-      pageTwo.length === 5 &&
-      new Set([...pageOne, ...pageTwo].map((row) => row.scan_id)).size === 25;
+      pageTwo.length === 6 &&
+      new Set([...pageOne, ...pageTwo].map((row) => row.scan_id)).size === 26;
     record(steps, 'Page 1 und Page 2 paginieren korrekt', paginationOk);
 
     if (!paginationOk) {

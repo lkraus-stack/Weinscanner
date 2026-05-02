@@ -130,19 +130,23 @@ async function invokeAnalysisFunction<T>(
 
 export async function extractWineFromLabel(
   imageUrl: string,
-  ocrText?: string
+  ocrText?: string,
+  secondaryImageUrl?: string
 ): Promise<WineExtraction> {
   return invokeAnalysisFunction<WineExtraction>('extract-wine', {
     imageUrl,
     ocrText,
+    secondaryImageUrl,
   });
 }
 
 export async function scanWineFromLabel(
-  imageUrl: string
+  imageUrl: string,
+  secondaryImageUrl?: string
 ): Promise<ScanWineResult> {
   return invokeAnalysisFunction<ScanWineResult>('scan-wine', {
     imageUrl,
+    secondaryImageUrl,
   });
 }
 

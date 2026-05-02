@@ -12,7 +12,11 @@ export type Confidence = {
 export type MinimalWineExtraction = {
   estimated_vintage_year: number | null;
   estimated_vintage_year_reason: string | null;
+  grape_variety: string | null;
+  needs_more_info_reason: string | null;
+  photo_quality: 'good' | 'ok' | 'poor';
   producer: string;
+  visible_text_lines: string[];
   wine_name: string;
   vintage_year: number | null;
   confidence: Confidence;
@@ -43,6 +47,7 @@ export type WineExtraction = MinimalWineExtraction & {
 export type ExtractWineRequest = {
   imageUrl: string;
   ocrText?: string;
+  secondaryImageUrl?: string;
 };
 
 const WINE_COLORS = new Set<WineColor>([
@@ -96,6 +101,38 @@ function stringList(value: unknown, maxItems = 8): string[] {
     .map((item) => item.trim())
     .filter(Boolean)
     .slice(0, maxItems);
+}
+
+function photoQuality(value: unknown): MinimalWineExtraction['photo_quality'] {
+  if (value === 'good' || value === 'ok' || value === 'poor') {
+    return value;
+  }
+
+  return 'ok';
+}
+
+function parseHttpUrl(value: unknown, label: string): string | undefined {
+  if (value === null || value === undefined || value === '') {
+    return undefined;
+  }
+
+  if (typeof value !== 'string') {
+    throw new Error(`Ungültiger Request: ${label} ist keine URL.`);
+  }
+
+  let parsedUrl: URL;
+
+  try {
+    parsedUrl = new URL(value);
+  } catch {
+    throw new Error(`Ungültiger Request: ${label} ist keine URL.`);
+  }
+
+  if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
+    throw new Error(`Ungültiger Request: ${label} muss eine HTTP-URL sein.`);
+  }
+
+  return value;
 }
 
 function confidence(value: unknown): number {
@@ -162,21 +199,16 @@ export function validateExtractWineRequest(value: unknown): ExtractWineRequest {
     throw new Error('Ungültiger Request: imageUrl fehlt.');
   }
 
-  let parsedUrl: URL;
-
-  try {
-    parsedUrl = new URL(value.imageUrl);
-  } catch {
-    throw new Error('Ungültiger Request: imageUrl ist keine URL.');
-  }
-
-  if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
-    throw new Error('Ungültiger Request: imageUrl muss eine HTTP-URL sein.');
-  }
+  const imageUrl = parseHttpUrl(value.imageUrl, 'imageUrl');
+  const secondaryImageUrl = parseHttpUrl(
+    value.secondaryImageUrl,
+    'secondaryImageUrl'
+  );
 
   return {
-    imageUrl: value.imageUrl,
+    imageUrl: imageUrl ?? '',
     ocrText: typeof value.ocrText === 'string' ? value.ocrText : undefined,
+    secondaryImageUrl,
   };
 }
 
@@ -195,7 +227,11 @@ export function validateMinimalWineExtraction(
     estimated_vintage_year_reason: stringOrNull(
       value.estimated_vintage_year_reason
     ),
+    grape_variety: stringOrNull(value.grape_variety),
+    needs_more_info_reason: stringOrNull(value.needs_more_info_reason),
+    photo_quality: photoQuality(value.photo_quality),
     producer: requiredString(value.producer, ''),
+    visible_text_lines: stringList(value.visible_text_lines, 16),
     wine_name: requiredString(value.wine_name, ''),
     vintage_year: vintageYear,
     confidence: {

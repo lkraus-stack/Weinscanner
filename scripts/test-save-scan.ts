@@ -23,9 +23,10 @@ type TestEnv = {
 
 type SaveScanPayload = {
   corrections?: Array<{ field: string; ai_value: string; user_value: string }>;
+  existingScanId?: string | null;
   imageUrl?: string;
-  selectedVintageYear: number;
-  source: 'cache' | 'fresh' | 'manual';
+  selectedVintageYear: number | null;
+  source: 'cache' | 'draft' | 'fresh' | 'manual';
   storagePath: string;
   vintageData: Record<string, unknown>;
   wineData: Record<string, unknown>;
@@ -34,8 +35,9 @@ type SaveScanPayload = {
 
 type SaveScanResult = {
   scanId: string;
-  wineId: string;
-  vintageId: string;
+  status?: 'draft' | 'saved';
+  wineId: string | null;
+  vintageId: string | null;
 };
 
 const ENV_PATH = resolve(process.cwd(), '.env.test');
@@ -219,7 +221,23 @@ async function uploadTestImage(
   );
 }
 
-function buildManualPayload(storagePath: string, imageUrl: string): SaveScanPayload {
+function buildDraftPayload(storagePath: string, imageUrl: string): SaveScanPayload {
+  return {
+    corrections: [],
+    imageUrl,
+    selectedVintageYear: null,
+    source: 'draft',
+    storagePath,
+    vintageData: {},
+    wineData: {},
+  };
+}
+
+function buildManualPayload(
+  storagePath: string,
+  imageUrl: string,
+  existingScanId?: string
+): SaveScanPayload {
   return {
     corrections: [
       {
@@ -229,6 +247,7 @@ function buildManualPayload(storagePath: string, imageUrl: string): SaveScanPayl
       },
     ],
     imageUrl,
+    existingScanId,
     selectedVintageYear: 2024,
     source: 'manual',
     storagePath,
@@ -295,6 +314,10 @@ async function validateManualSave(
   result: SaveScanResult,
   storagePath: string
 ) {
+  if (!result.vintageId || !result.wineId) {
+    return false;
+  }
+
   const { data: scan, error: scanError } = await adminClient
     .from('scans')
     .select('id, user_id, vintage_id, label_image_url')
@@ -358,6 +381,10 @@ async function validateCacheSave(
   wineId: string,
   storagePath: string
 ) {
+  if (!result.vintageId || !result.wineId) {
+    return false;
+  }
+
   const { data: scan, error: scanError } = await adminClient
     .from('scans')
     .select('id, user_id, vintage_id, label_image_url')
@@ -442,7 +469,10 @@ function printMissingSteps(steps: Step[]) {
     'Test-User erstellt oder gefunden',
     'Anon-Login erfolgreich',
     'Testbilder hochgeladen',
+    'save-scan draft erfolgreich',
+    'Draft-Scan ohne Vintage sichtbar',
     'save-scan manual erfolgreich',
+    'Manual-Save aktualisiert Draft statt Duplikat',
     'DB-Zeilen und ai_feedback validiert',
     'save-scan cache erfolgreich',
     'Cache-Save nutzt bestehenden Wein',
@@ -518,15 +548,59 @@ async function runSaveScanTest() {
     const manualResult = await invokeSaveScan(
       env,
       signInData.session.access_token,
-      buildManualPayload(firstImage.storagePath, firstImage.signedUrl)
+      buildDraftPayload(firstImage.storagePath, firstImage.signedUrl)
     );
-    insertedWineIds.push(manualResult.wineId);
-    record(steps, 'save-scan manual erfolgreich', Boolean(manualResult.scanId));
+    record(steps, 'save-scan draft erfolgreich', Boolean(manualResult.scanId));
+
+    const { data: draftScan, error: draftScanError } = await adminClient
+      .from('scans')
+      .select('id, user_id, vintage_id, label_image_url')
+      .eq('id', manualResult.scanId)
+      .single();
+
+    if (draftScanError) {
+      throw draftScanError;
+    }
+
+    const draftValid =
+      draftScan.user_id === testUser.id &&
+      draftScan.vintage_id === null &&
+      draftScan.label_image_url === firstImage.storagePath &&
+      manualResult.vintageId === null &&
+      manualResult.wineId === null;
+    record(steps, 'Draft-Scan ohne Vintage sichtbar', draftValid);
+
+    if (!draftValid) {
+      throw new Error('Draft-Save wurde nicht korrekt persistiert.');
+    }
+
+    const upgradedManualResult = await invokeSaveScan(
+      env,
+      signInData.session.access_token,
+      buildManualPayload(
+        firstImage.storagePath,
+        firstImage.signedUrl,
+        manualResult.scanId
+      )
+    );
+    if (upgradedManualResult.wineId) {
+      insertedWineIds.push(upgradedManualResult.wineId);
+    }
+    record(
+      steps,
+      'save-scan manual erfolgreich',
+      Boolean(upgradedManualResult.scanId)
+    );
+    record(
+      steps,
+      'Manual-Save aktualisiert Draft statt Duplikat',
+      upgradedManualResult.scanId === manualResult.scanId
+    );
 
     const manualDbValid = await validateManualSave(
       adminClient,
       testUser.id,
-      manualResult,
+      upgradedManualResult,
       firstImage.storagePath
     );
     record(steps, 'DB-Zeilen und ai_feedback validiert', manualDbValid);
@@ -541,7 +615,7 @@ async function runSaveScanTest() {
       buildCachePayload(
         secondImage.storagePath,
         secondImage.signedUrl,
-        manualResult.wineId
+        upgradedManualResult.wineId ?? ''
       )
     );
     record(steps, 'save-scan cache erfolgreich', Boolean(cacheResult.scanId));
@@ -550,7 +624,7 @@ async function runSaveScanTest() {
       adminClient,
       testUser.id,
       cacheResult,
-      manualResult.wineId,
+      upgradedManualResult.wineId ?? '',
       secondImage.storagePath
     );
     record(steps, 'Cache-Save nutzt bestehenden Wein', cacheDbValid);
@@ -559,7 +633,8 @@ async function runSaveScanTest() {
       throw new Error('Cache-Save hat den bestehenden Wein nicht korrekt genutzt.');
     }
 
-    console.log('Manual Save:', JSON.stringify(manualResult, null, 2));
+    console.log('Draft Save:', JSON.stringify(manualResult, null, 2));
+    console.log('Manual Save:', JSON.stringify(upgradedManualResult, null, 2));
     console.log('Cache Save:', JSON.stringify(cacheResult, null, 2));
 
     await cleanup(

@@ -179,7 +179,7 @@ function buildTitle(detail: ScanDetail) {
   const wine = vintage?.wine;
 
   if (!vintage || !wine) {
-    return 'Wein nicht verfügbar';
+    return 'Scan zu prüfen';
   }
 
   const baseTitle =
@@ -188,6 +188,31 @@ function buildTitle(detail: ScanDetail) {
       : `${wine.producer} ${wine.wine_name}`;
 
   return `${baseTitle}, ${vintage.vintage_year}`;
+}
+
+function buildSubtitle(detail: ScanDetail) {
+  const wine = detail.vintage?.wine;
+
+  if (!wine) {
+    return 'Foto gespeichert, Details fehlen noch';
+  }
+
+  return joinMeta([wine.region, wine.country]);
+}
+
+function buildDraftInfoItems(detail: ScanDetail): InfoItem[] {
+  return [
+    { label: 'Status', value: 'Zu prüfen' },
+    { label: 'Gescannt', value: formatDate(detail.scannedAt) ?? 'Gerade eben' },
+    {
+      label: 'Weindaten',
+      value: 'Noch offen',
+    },
+    {
+      label: 'Jahrgang',
+      value: 'Noch offen',
+    },
+  ];
 }
 
 function buildInfoItems(detail: ScanDetail): InfoItem[] {
@@ -363,15 +388,7 @@ export default function WineDetailScreen() {
         />
       ) : null}
 
-      {scanId && scanDetailQuery.data && !scanDetailQuery.data.vintage ? (
-        <CenterState
-          description="Dieser Scan ist noch keinem Jahrgang zugeordnet."
-          icon="wine-outline"
-          title="Keine Weindaten gefunden"
-        />
-      ) : null}
-
-      {scanId && scanDetailQuery.data?.vintage ? (
+      {scanId && scanDetailQuery.data ? (
         <WineDetailContent
           detail={scanDetailQuery.data}
           paddingBottom={insets.bottom + 120}
@@ -401,14 +418,7 @@ function DetailHeader({
         <Ionicons name="chevron-back" size={24} color={colors.text} />
       </Pressable>
 
-      <View style={styles.headerActions} pointerEvents="none">
-        <View style={styles.headerButton}>
-          <Ionicons name="heart-outline" size={22} color={colors.text} />
-        </View>
-        <View style={styles.headerButton}>
-          <Ionicons name="ellipsis-horizontal" size={22} color={colors.text} />
-        </View>
-      </View>
+      <View style={styles.headerButtonSpacer} />
     </View>
   );
 }
@@ -427,6 +437,7 @@ function WineDetailContent({
   const imageUrl = detail.labelImageUrl ?? detail.bottleImageUrl;
   const rating = getVisibleRating(detail.ratings);
   const vintage = detail.vintage;
+  const isDraft = !vintage;
   const wineId = vintage?.wine_id ?? null;
   const currentVintageYear = vintage?.vintage_year ?? null;
   const vintagesQuery = useWineVintages(wineId);
@@ -698,7 +709,9 @@ function WineDetailContent({
     setIsCorrectionModalVisible(false);
     Alert.alert(
       'Scan löschen?',
-      'Der Scan wird aus deinem Verlauf entfernt. Wein und Jahrgang bleiben erhalten.',
+      detail.vintage
+        ? 'Der Scan wird aus deinem Verlauf entfernt. Wein und Jahrgang bleiben erhalten.'
+        : 'Der Entwurf wird aus deinem Verlauf entfernt.',
       [
         { text: 'Abbrechen', style: 'cancel' },
         {
@@ -713,6 +726,29 @@ function WineDetailContent({
   function reidentifyWine() {
     setIsCorrectionModalVisible(false);
     router.push('/(app)/scan');
+  }
+
+  async function openDraftReview() {
+    if (!detail.labelImagePath || !detail.labelImageUrl) {
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert(
+        'Foto fehlt',
+        'Dieser Entwurf hat kein abrufbares Etikett-Foto.'
+      );
+      return;
+    }
+
+    await Haptics.selectionAsync();
+    router.push({
+      pathname: '/scan-confirm',
+      params: {
+        draftScanId: detail.id,
+        secondarySignedUrl: detail.bottleImageUrl ?? '',
+        secondaryStoragePath: detail.bottleImagePath ?? '',
+        signedUrl: detail.labelImageUrl,
+        storagePath: detail.labelImagePath,
+      },
+    });
   }
 
   function saveVintageReassignment() {
@@ -750,13 +786,33 @@ function WineDetailContent({
           )}
         </Animated.View>
 
+        <PhotoGallery detail={detail} />
+
         <View style={styles.summary}>
           <Text style={styles.title}>{buildTitle(detail)}</Text>
+          <Text style={styles.subtitle}>{buildSubtitle(detail)}</Text>
+          <View style={styles.statusRow}>
+            <View style={[styles.statusPill, isDraft && styles.draftStatusPill]}>
+              <Ionicons
+                name={isDraft ? 'alert-circle-outline' : 'checkmark-circle-outline'}
+                size={15}
+                color={isDraft ? colors.warning : colors.success}
+              />
+              <Text style={styles.statusPillText}>
+                {isDraft ? 'Zu prüfen' : 'Gespeichert'}
+              </Text>
+            </View>
+            {formatDate(detail.scannedAt) ? (
+              <Text style={styles.scannedDate}>
+                {formatDate(detail.scannedAt)}
+              </Text>
+            ) : null}
+          </View>
           {rating ? <RatingSummary rating={rating} /> : null}
         </View>
 
-        <Section title="Wein-Info">
-          <InfoGrid items={buildInfoItems(detail)} />
+        <Section title="Steckbrief">
+          <InfoGrid items={isDraft ? buildDraftInfoItems(detail) : buildInfoItems(detail)} />
         </Section>
 
         {vintage?.aromas.length ? (
@@ -766,7 +822,7 @@ function WineDetailContent({
         ) : null}
 
         {hasDescription ? (
-          <Section title="Beschreibung">
+          <Section title="Charakter">
             <View style={styles.descriptionPanel}>
               {hasText(vintage?.description_short) ? (
                 <Text style={styles.descriptionLead}>
@@ -804,25 +860,34 @@ function WineDetailContent({
         ) : null}
 
         {hasText(vintage?.vinification) ? (
-          <Section title="Weinherstellung">
+          <Section title="Ausbau">
             <View style={styles.descriptionPanel}>
               <Text style={styles.descriptionBody}>{vintage?.vinification}</Text>
             </View>
           </Section>
         ) : null}
 
-        <DetailActions
-          isBusy={
-            reassignVintageMutation.isPending ||
-            deleteScanMutation.isPending ||
-            saveRatingMutation.isPending ||
-            addInventoryMutation.isPending ||
-            increaseInventoryMutation.isPending
-          }
-          onCorrect={openCorrectionModal}
-          onInventory={openInventoryModal}
-          onRate={openRatingModal}
-        />
+        {isDraft ? (
+          <DraftDetailActions
+            isBusy={deleteScanMutation.isPending}
+            onDelete={confirmDeleteScan}
+            onReview={openDraftReview}
+            onScanAgain={reidentifyWine}
+          />
+        ) : (
+          <DetailActions
+            isBusy={
+              reassignVintageMutation.isPending ||
+              deleteScanMutation.isPending ||
+              saveRatingMutation.isPending ||
+              addInventoryMutation.isPending ||
+              increaseInventoryMutation.isPending
+            }
+            onCorrect={openCorrectionModal}
+            onInventory={openInventoryModal}
+            onRate={openRatingModal}
+          />
+        )}
       </ScrollView>
 
       <AddInventoryModal
@@ -907,6 +972,45 @@ function RatingSummary({ rating }: { rating: ScanDetailRating }) {
   );
 }
 
+function PhotoGallery({ detail }: { detail: ScanDetail }) {
+  const { styles } = useWineDetailStyles();
+  const photos = [
+    {
+      label: 'Etikett',
+      path: detail.labelImagePath,
+      url: detail.labelImageUrl,
+    },
+    {
+      label: 'Rückseite',
+      path: detail.bottleImagePath,
+      url: detail.bottleImageUrl,
+    },
+  ].filter((photo) => Boolean(photo.url));
+
+  if (photos.length < 2) {
+    return null;
+  }
+
+  return (
+    <View style={styles.galleryRow}>
+      {photos.map((photo) => (
+        <View
+          key={`${photo.label}-${photo.path ?? photo.url ?? ''}`}
+          style={styles.galleryItem}
+        >
+          <Image
+            cachePolicy="memory-disk"
+            contentFit="cover"
+            source={{ uri: photo.url ?? '' }}
+            style={styles.galleryImage}
+          />
+          <Text style={styles.galleryLabel}>{photo.label}</Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
 function RecommendationRow({
   icon,
   label,
@@ -926,6 +1030,69 @@ function RecommendationRow({
       <View style={styles.recommendationText}>
         <Text style={styles.recommendationLabel}>{label}</Text>
         <Text style={styles.recommendationValue}>{value}</Text>
+      </View>
+    </View>
+  );
+}
+
+function DraftDetailActions({
+  isBusy,
+  onDelete,
+  onReview,
+  onScanAgain,
+}: {
+  isBusy: boolean;
+  onDelete: () => void;
+  onReview: () => void;
+  onScanAgain: () => void;
+}) {
+  const { colors, styles } = useWineDetailStyles();
+
+  return (
+    <View style={styles.draftActions}>
+      <View style={styles.draftMessage}>
+        <View style={styles.recommendationIcon}>
+          <Ionicons name="create-outline" size={20} color={colors.primaryDark} />
+        </View>
+        <View style={styles.recommendationText}>
+          <Text style={styles.recommendationLabel}>Scan ist gesichert</Text>
+          <Text style={styles.recommendationValue}>
+            Ergänze Weinname und Jahrgang, sobald du das Etikett geprüft hast.
+          </Text>
+        </View>
+      </View>
+
+      <Pressable
+        accessibilityRole="button"
+        disabled={isBusy}
+        onPress={onReview}
+        style={[styles.actionButton, isBusy && styles.disabledAction]}
+      >
+        <Ionicons name="create-outline" size={20} color={colors.white} />
+        <Text style={styles.actionButtonText}>Daten ergänzen</Text>
+      </Pressable>
+
+      <View style={styles.draftSecondaryActions}>
+        <Pressable
+          accessibilityRole="button"
+          disabled={isBusy}
+          onPress={onScanAgain}
+          style={styles.secondaryDraftButton}
+        >
+          <Ionicons name="camera-outline" size={18} color={colors.primaryDark} />
+          <Text style={styles.secondaryDraftButtonText}>Neu scannen</Text>
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          disabled={isBusy}
+          onPress={onDelete}
+          style={styles.secondaryDraftButton}
+        >
+          <Ionicons name="trash-outline" size={18} color={colors.error} />
+          <Text style={[styles.secondaryDraftButtonText, styles.deleteText]}>
+            Löschen
+          </Text>
+        </Pressable>
       </View>
     </View>
   );
@@ -1423,16 +1590,61 @@ function makeStyles(colors: ThemeColors) {
   disabledAction: {
     opacity: 0.55,
   },
+  deleteText: {
+    color: colors.error,
+  },
+  draftActions: {
+    gap: spacing.md,
+  },
+  draftMessage: {
+    alignItems: 'flex-start',
+    backgroundColor: colors.surfaceWarm,
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: spacing.md,
+    padding: spacing.lg,
+  },
+  draftSecondaryActions: {
+    flexDirection: 'row',
+    gap: spacing.md,
+  },
+  draftStatusPill: {
+    borderColor: colors.warning,
+  },
+  galleryImage: {
+    height: 74,
+    width: '100%',
+  },
+  galleryItem: {
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    flex: 1,
+    gap: spacing.xs,
+    overflow: 'hidden',
+    padding: spacing.xs,
+  },
+  galleryLabel: {
+    color: colors.textSecondary,
+    fontSize: typography.size.xs,
+    fontWeight: typography.weight.extraBold,
+    paddingBottom: spacing.xs,
+    paddingHorizontal: spacing.xs,
+  },
+  galleryRow: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    marginTop: -spacing.md,
+  },
   header: {
     alignItems: 'center',
     flexDirection: 'row',
     justifyContent: 'space-between',
     paddingBottom: spacing.sm,
     paddingHorizontal: spacing.lg,
-  },
-  headerActions: {
-    flexDirection: 'row',
-    gap: spacing.sm,
   },
   headerButton: {
     alignItems: 'center',
@@ -1442,6 +1654,10 @@ function makeStyles(colors: ThemeColors) {
     borderWidth: 1,
     height: 44,
     justifyContent: 'center',
+    width: 44,
+  },
+  headerButtonSpacer: {
+    height: 44,
     width: 44,
   },
   infoCell: {
@@ -1696,12 +1912,64 @@ function makeStyles(colors: ThemeColors) {
     fontSize: typography.size.lg,
     fontWeight: typography.weight.black,
   },
+  scannedDate: {
+    color: colors.textSecondary,
+    fontSize: typography.size.sm,
+    fontWeight: typography.weight.bold,
+  },
+  secondaryDraftButton: {
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    flex: 1,
+    flexDirection: 'row',
+    gap: spacing.sm,
+    justifyContent: 'center',
+    minHeight: 50,
+    paddingHorizontal: spacing.md,
+  },
+  secondaryDraftButtonText: {
+    color: colors.primaryDark,
+    fontSize: typography.size.sm,
+    fontWeight: typography.weight.extraBold,
+  },
   stars: {
     flexDirection: 'row',
     gap: 1,
   },
+  statusPill: {
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: radii.pill,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: spacing.xs,
+    minHeight: 30,
+    paddingHorizontal: spacing.sm,
+  },
+  statusPillText: {
+    color: colors.text,
+    fontSize: typography.size.xs,
+    fontWeight: typography.weight.extraBold,
+  },
+  statusRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.md,
+  },
   summary: {
     gap: spacing.md,
+  },
+  subtitle: {
+    color: colors.textSecondary,
+    fontSize: typography.size.base,
+    fontWeight: typography.weight.bold,
+    lineHeight: typography.lineHeight.base,
   },
   secondaryModalButton: {
     alignItems: 'center',

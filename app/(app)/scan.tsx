@@ -23,7 +23,12 @@ const FLASH_MODES: FlashMode[] = ['auto', 'on', 'off'];
 export default function ScanScreen() {
   const { colors, styles } = useScanStyles();
   const router = useRouter();
-  const params = useLocalSearchParams<{ scanTarget?: string }>();
+  const params = useLocalSearchParams<{
+    draftScanId?: string;
+    primarySignedUrl?: string;
+    primaryStoragePath?: string;
+    scanTarget?: string;
+  }>();
   const insets = useSafeAreaInsets();
   const cameraRef = useRef<CameraView>(null);
   const [permission, requestPermission] = useCameraPermissions();
@@ -37,7 +42,10 @@ export default function ScanScreen() {
     router.push({
       pathname: '/scan-review',
       params: {
+        draftScanId: params.draftScanId ?? '',
         height: height ? String(height) : '',
+        primarySignedUrl: params.primarySignedUrl ?? '',
+        primaryStoragePath: params.primaryStoragePath ?? '',
         uri,
         width: width ? String(width) : '',
       },

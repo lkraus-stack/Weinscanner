@@ -1,4 +1,5 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { useQueryClient } from '@tanstack/react-query';
 import { Image } from 'expo-image';
 import * as Haptics from 'expo-haptics';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -17,11 +18,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ReviewActions } from '@/components/scan/ReviewActions';
 import { UploadOverlay } from '@/components/scan/UploadOverlay';
 import { useScanFlow } from '@/hooks/useScanFlow';
+import { saveScan } from '@/lib/ai-client';
 import { cropImage, getImageDimensions, type CropRect } from '@/lib/image';
 import { uploadWineLabel } from '@/lib/storage';
 import { useTheme, type ThemeColors } from '@/theme/ThemeProvider';
 import { radii, spacing } from '@/theme/spacing';
 import { typography } from '@/theme/typography';
+import type { SaveScanPayload } from '@/types/wine-extraction';
 
 type CropPreset = 'original' | 'label' | 'square';
 
@@ -72,16 +75,71 @@ function getErrorMessage(error: unknown) {
   return 'Bitte versuche es noch einmal.';
 }
 
+function buildDraftPayload({
+  bottleStoragePath,
+  existingScanId,
+  imageUrl,
+  storagePath,
+}: {
+  bottleStoragePath?: string | null;
+  existingScanId?: string | null;
+  imageUrl: string;
+  storagePath: string;
+}): SaveScanPayload {
+  return {
+    bottleStoragePath,
+    corrections: [],
+    existingScanId,
+    imageUrl,
+    selectedVintageYear: null,
+    source: 'draft',
+    storagePath,
+    vintageData: {
+      ai_confidence: null,
+      alcohol_percent: null,
+      aromas: [],
+      data_sources: [],
+      description_long: null,
+      description_short: null,
+      drinking_window_end: null,
+      drinking_window_start: null,
+      food_pairing: null,
+      price_max_eur: null,
+      price_min_eur: null,
+      serving_temperature: null,
+      vinification: null,
+    },
+    wineData: {
+      alcohol_percent: null,
+      appellation: null,
+      country: null,
+      grape_variety: null,
+      producer: null,
+      region: null,
+      taste_dryness: null,
+      wine_color: null,
+      wine_name: null,
+    },
+  };
+}
+
 export default function ScanReviewScreen() {
   const { colors, styles } = useScanReviewStyles();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{
+    draftScanId?: string;
     height?: string;
+    primarySignedUrl?: string;
+    primaryStoragePath?: string;
     uri?: string;
     width?: string;
   }>();
   const initialUri = normalizeParam(params.uri);
+  const draftScanIdParam = normalizeParam(params.draftScanId);
+  const primarySignedUrl = normalizeParam(params.primarySignedUrl);
+  const primaryStoragePath = normalizeParam(params.primaryStoragePath);
   const initialWidth = parseDimension(params.width);
   const initialHeight = parseDimension(params.height);
   const flow = useScanFlow(initialUri);
@@ -192,6 +250,14 @@ export default function ScanReviewScreen() {
     flow.startUpload();
 
     try {
+      const dimensions = await getOriginalDimensions();
+
+      if (dimensions.width < 900 || dimensions.height < 900) {
+        throw new Error(
+          'Das Foto ist zu klein. Bitte fotografiere das Etikett näher und schärfer.'
+        );
+      }
+
       const uploadResult = await uploadWineLabel(flow.state.uri);
 
       if (uploadRunId !== uploadRunRef.current) {
@@ -199,12 +265,35 @@ export default function ScanReviewScreen() {
       }
 
       flow.completeUpload(uploadResult);
+      const finalStoragePath = primaryStoragePath || uploadResult.storagePath;
+      const finalSignedUrl = primarySignedUrl || uploadResult.signedUrl;
+      const finalBottleStoragePath = primaryStoragePath
+        ? uploadResult.storagePath
+        : null;
+      const savedDraft = await saveScan(
+        buildDraftPayload({
+          bottleStoragePath: finalBottleStoragePath,
+          existingScanId: draftScanIdParam,
+          imageUrl: finalSignedUrl,
+          storagePath: finalStoragePath,
+        })
+      );
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['history'] }),
+        queryClient.invalidateQueries({ queryKey: ['user-stats'] }),
+        queryClient.invalidateQueries({
+          queryKey: ['scan-detail', savedDraft.scanId],
+        }),
+      ]);
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       router.push({
         pathname: '/scan-confirm',
         params: {
-          signedUrl: uploadResult.signedUrl,
-          storagePath: uploadResult.storagePath,
+          draftScanId: savedDraft.scanId,
+          secondarySignedUrl: primarySignedUrl ? uploadResult.signedUrl : '',
+          secondaryStoragePath: primaryStoragePath ? uploadResult.storagePath : '',
+          signedUrl: primarySignedUrl || uploadResult.signedUrl,
+          storagePath: primaryStoragePath || uploadResult.storagePath,
         },
       });
     } catch (error: unknown) {
@@ -215,7 +304,7 @@ export default function ScanReviewScreen() {
       const message = getErrorMessage(error);
       flow.failUpload(message);
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      Alert.alert('Upload fehlgeschlagen', message, [
+      Alert.alert('Scan konnte nicht gespeichert werden', message, [
         { text: 'Abbrechen', style: 'cancel' },
         { text: 'Erneut versuchen', onPress: uploadPhoto },
       ]);
@@ -262,6 +351,16 @@ export default function ScanReviewScreen() {
       </View>
 
       <View style={{ paddingBottom: insets.bottom + spacing.md }}>
+        <View style={styles.qualityHint}>
+          <Ionicons
+            name="scan-outline"
+            size={18}
+            color={colors.primaryDark}
+          />
+          <Text style={styles.qualityHintText}>
+            Etikett groß, gerade und vollständig im Bild halten.
+          </Text>
+        </View>
         <ReviewActions
           disabled={isCropping}
           isUploading={isUploading}
@@ -486,6 +585,26 @@ function makeStyles(colors: ThemeColors) {
     fontSize: typography.size.xl,
     fontWeight: typography.weight.black,
     textAlign: 'center',
+  },
+  qualityHint: {
+    alignItems: 'center',
+    alignSelf: 'center',
+    backgroundColor: colors.surfaceWarm,
+    borderColor: colors.border,
+    borderRadius: radii.pill,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: spacing.xs,
+    marginBottom: spacing.md,
+    maxWidth: '90%',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  qualityHintText: {
+    color: colors.primaryDark,
+    flexShrink: 1,
+    fontSize: typography.size.sm,
+    fontWeight: typography.weight.bold,
   },
   screen: {
     backgroundColor: colors.surface,

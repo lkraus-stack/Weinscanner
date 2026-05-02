@@ -9,7 +9,6 @@ import { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  Linking,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -30,7 +29,7 @@ import { useProfile } from '@/hooks/useProfile';
 import { useUserStats, type UserStats } from '@/hooks/useUserStats';
 import { deleteAccount } from '@/lib/account';
 import { exportUserData } from '@/lib/export';
-import { LINKS } from '@/lib/links';
+import type { LegalDocumentType } from '@/lib/legal-content';
 import {
   normalizePreferences,
   updateProfile,
@@ -199,12 +198,11 @@ export default function ProfileScreen() {
     }
   }
 
-  async function openLegalLink(url: string, title: string) {
-    try {
-      await Linking.openURL(url);
-    } catch {
-      Alert.alert(title, 'Der Link konnte nicht geöffnet werden.');
-    }
+  function openLegalPage(type: LegalDocumentType) {
+    router.push({
+      pathname: '/(app)/legal' as never,
+      params: { type },
+    });
   }
 
   function handleSentryTest() {
@@ -317,13 +315,13 @@ export default function ProfileScreen() {
             <SettingsRow
               icon="shield-checkmark-outline"
               label="Datenschutz"
-              onPress={() => void openLegalLink(LINKS.privacy, 'Datenschutz')}
+              onPress={() => openLegalPage('privacy')}
               value="Öffnen"
             />
             <SettingsRow
               icon="document-text-outline"
               label="Impressum"
-              onPress={() => void openLegalLink(LINKS.imprint, 'Impressum')}
+              onPress={() => openLegalPage('imprint')}
               value="Öffnen"
             />
           </SettingsPanel>

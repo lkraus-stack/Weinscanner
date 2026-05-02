@@ -17,36 +17,37 @@ export type HistoryFilters = {
 export type HistoryItemRecord = {
   country: string | null;
   grapeVariety: string | null;
+  isDraft: boolean;
   labelImagePath: string | null;
   labelImageUrl: string | null;
-  producer: string;
+  producer: string | null;
   ratingId: string | null;
   ratingStars: number | null;
   region: string | null;
   scannedAt: string;
   scanId: string;
-  vintageId: string;
-  vintageYear: number;
+  vintageId: string | null;
+  vintageYear: number | null;
   wineColor: WineColor | null;
-  wineId: string;
-  wineName: string;
+  wineId: string | null;
+  wineName: string | null;
 };
 
 type HistoryRpcRow = {
   country: string | null;
   grape_variety: string | null;
   label_image_path: string | null;
-  producer: string;
+  producer: string | null;
   rating_id: string | null;
   rating_stars: number | null;
   region: string | null;
   scanned_at: string;
   scan_id: string;
-  vintage_id: string;
-  vintage_year: number;
+  vintage_id: string | null;
+  vintage_year: number | null;
   wine_color: string | null;
-  wine_id: string;
-  wine_name: string;
+  wine_id: string | null;
+  wine_name: string | null;
 };
 
 const HISTORY_PAGE_SIZE = 20;
@@ -91,6 +92,7 @@ function mapHistoryRow(
   return {
     country: row.country,
     grapeVariety: row.grape_variety,
+    isDraft: !row.vintage_id,
     labelImagePath: row.label_image_path,
     labelImageUrl: row.label_image_path
       ? (signedUrlMap[row.label_image_path] ?? null)
