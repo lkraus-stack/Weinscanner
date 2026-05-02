@@ -6,6 +6,11 @@ import {
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
+import {
+  getRestaurantWineProfile,
+  type WineProfile,
+} from '../supabase/functions/_shared/wine-profile';
+
 type TestEnv = {
   RESTAURANT_TEST_EMAIL: string;
   RESTAURANT_TEST_PASSWORD: string;
@@ -25,6 +30,10 @@ type SearchRestaurant = {
   name: string;
   provider?: string;
   providerPlaceId?: string;
+  qualityLabel?: string | null;
+  qualityScore?: number | null;
+  qualitySignals?: string[];
+  wineProfile?: WineProfile | null;
 };
 
 const ENV_PATH = resolve(process.cwd(), '.env.test');
@@ -35,6 +44,93 @@ const MUNICH_CENTER = { lat: 48.137154, lng: 11.576124 };
 function record(steps: Step[], label: string, ok: boolean) {
   steps.push({ label, ok });
   console.log(`${steps.length}. ${label}: ${ok ? 'JA' : 'NEIN'}`);
+}
+
+function isWineProfile(value: unknown): value is WineProfile {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return false;
+  }
+
+  const recordValue = value as Partial<WineProfile>;
+
+  return (
+    Array.isArray(recordValue.badges) &&
+    typeof recordValue.hasSommelier === 'boolean' &&
+    typeof recordValue.hasWineCard === 'boolean' &&
+    typeof recordValue.isFullWineProfile === 'boolean' &&
+    typeof recordValue.isWineBar === 'boolean' &&
+    typeof recordValue.wineMentions === 'number' &&
+    (recordValue.wineScore === 0 ||
+      recordValue.wineScore === 1 ||
+      recordValue.wineScore === 2 ||
+      recordValue.wineScore === 3)
+  );
+}
+
+function recordWineProfileKeywordTests(steps: Step[]) {
+  const sommelier = getRestaurantWineProfile({
+    name: 'Bistro Test',
+    reviewTexts: ['Der Sommelier empfiehlt sehr gut.'],
+  });
+  const wineCard = getRestaurantWineProfile({
+    name: 'Restaurant Test',
+    reviewTexts: ['Tolle Weinkarte und breite Weinauswahl mit Wein.'],
+  });
+  const vinothek = getRestaurantWineProfile({
+    name: 'Vinothek Altstadt',
+    reviewTexts: [],
+  });
+  const wineBar = getRestaurantWineProfile({
+    name: 'Central Wine Bar',
+    reviewTexts: [],
+  });
+  const wineryMention = getRestaurantWineProfile({
+    name: 'Gasthaus Test',
+    reviewTexts: ['Regionale Flaschen direkt vom Weingut.'],
+  });
+  const emptyProfile = getRestaurantWineProfile({
+    name: 'Cafe Test',
+    reviewTexts: [],
+  });
+
+  record(
+    steps,
+    'WineProfile erkennt Sommelier-Signal',
+    sommelier?.hasSommelier === true &&
+      sommelier.badges.includes('Sommelier') &&
+      sommelier.wineScore === 1
+  );
+  record(
+    steps,
+    'WineProfile erkennt Weinkarte und Weinauswahl',
+    wineCard?.hasWineCard === true &&
+      wineCard.badges.includes('Weinkarte') &&
+      wineCard.wineScore === 2
+  );
+  record(
+    steps,
+    'WineProfile erkennt Vinothek als volles Weinprofil',
+    vinothek?.isFullWineProfile === true &&
+      vinothek.badges.includes('Vinothek') &&
+      vinothek.wineScore === 3
+  );
+  record(
+    steps,
+    'WineProfile erkennt Wine Bar als Weinbar',
+    wineBar?.isFullWineProfile === true &&
+      wineBar.badges.includes('Weinbar') &&
+      wineBar.wineScore === 3
+  );
+  record(
+    steps,
+    'WineProfile zählt Weingut als Wein-Erwähnung',
+    wineryMention?.wineMentions === 1 && wineryMention.wineScore === 1
+  );
+  record(
+    steps,
+    'WineProfile bleibt ohne Wein-Signal leer',
+    emptyProfile === null
+  );
 }
 
 function parseEnvFile(contents: string): Partial<TestEnv> {
@@ -182,6 +278,7 @@ async function main() {
   }
 
   record(steps, 'Restaurant-Testuser ist eingeloggt', true);
+  recordWineProfileKeywordTests(steps);
 
   const { data: geocodeResult, error: geocodeError } =
     await userClient.functions.invoke('geocode-city', {
@@ -208,7 +305,12 @@ async function main() {
           southWest: { lat: 48.097154, lng: 11.536124 },
         },
         center: MUNICH_CENTER,
-        filters: { minRating: 4.2, openNow: false },
+        filters: {
+          minRating: 4.2,
+          openNow: false,
+          qualityMode: 'smart',
+          radiusMeters: 5000,
+        },
       },
     });
 
@@ -226,6 +328,84 @@ async function main() {
     Array.isArray(searchResult?.data)
   );
 
+  record(
+    steps,
+    'Smart-Quality-Suche liefert Qualitätsfelder',
+    restaurants.length === 0 ||
+      restaurants.every(
+        (item) =>
+          typeof item.qualityScore === 'number' &&
+          typeof item.qualityLabel === 'string' &&
+          Array.isArray(item.qualitySignals)
+      )
+  );
+
+  record(
+    steps,
+    'Restaurant-Suche liefert valide optionale Weinprofile',
+    restaurants.every(
+      (item) =>
+        item.wineProfile === undefined ||
+        item.wineProfile === null ||
+        isWineProfile(item.wineProfile)
+    )
+  );
+
+  const { data: strictSearchResult, error: strictSearchError } =
+    await userClient.functions.invoke('search-restaurants', {
+      body: {
+        bounds: {
+          northEast: { lat: 48.177154, lng: 11.616124 },
+          southWest: { lat: 48.097154, lng: 11.536124 },
+        },
+        center: MUNICH_CENTER,
+        filters: {
+          openNow: false,
+          qualityMode: 'strict',
+          radiusMeters: 1000,
+        },
+      },
+    });
+
+  if (strictSearchError) {
+    throw strictSearchError;
+  }
+
+  record(
+    steps,
+    'Strenge Umkreissuche bleibt stabil',
+    Array.isArray(strictSearchResult?.data)
+  );
+
+  const radiusResults = await Promise.all(
+    [1000, 3000, 5000, 10000, 25000].map((radiusMeters) =>
+      userClient.functions.invoke('search-restaurants', {
+        body: {
+          bounds: {
+            northEast: { lat: 48.177154, lng: 11.616124 },
+            southWest: { lat: 48.097154, lng: 11.536124 },
+          },
+          center: MUNICH_CENTER,
+          filters: {
+            openNow: false,
+            qualityMode: 'smart',
+            radiusMeters,
+          },
+        },
+      })
+    )
+  );
+
+  const radiusSearchesAreStable = radiusResults.every(
+    ({ data, error }) => !error && Array.isArray(data?.data)
+  );
+
+  record(
+    steps,
+    'Alle Umkreisfilter bleiben stabil',
+    radiusSearchesAreStable
+  );
+
   const restaurant =
     restaurants[0] ??
     ({
@@ -238,13 +418,28 @@ async function main() {
       isOpenNow: true,
       location: { lat: 48.13503, lng: 11.57628 },
       name: 'Weinort am Viktualienmarkt Smoke',
+      openingHoursText: [],
+      photoRefs: [],
       photoUrl: null,
       priceLevel: 'Mittel',
       provider: 'fallback',
       providerPlaceId: 'fallback-viktualienmarkt-smoke',
+      qualityLabel: 'Sehr gut',
+      qualityScore: 86,
+      qualitySignals: ['Smoke-Test Qualität'],
       rating: 4.6,
       ratingCount: 312,
       source: 'fallback',
+      types: ['restaurant', 'wine_bar'],
+      wineProfile: {
+        badges: ['Weinbar'],
+        hasSommelier: false,
+        hasWineCard: false,
+        isFullWineProfile: true,
+        isWineBar: true,
+        wineMentions: 1,
+        wineScore: 3,
+      },
     } satisfies Record<string, unknown>);
 
   const { data: savedResult, error: saveError } =
@@ -272,7 +467,8 @@ async function main() {
     steps,
     'Restaurant-Detail liefert gecachte oder Google-Daten',
     typeof detailResult?.restaurant?.name === 'string' &&
-      typeof detailResult?.restaurant?.location?.lat === 'number'
+      typeof detailResult?.restaurant?.location?.lat === 'number' &&
+      typeof detailResult?.restaurant?.qualityScore === 'number'
   );
 
   const { data: savedRows, error: savedRowsError } = await userClient

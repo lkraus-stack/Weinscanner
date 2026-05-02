@@ -2,8 +2,8 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { Image } from 'expo-image';
 import * as Haptics from 'expo-haptics';
 import * as Location from 'expo-location';
-import { useRouter } from 'expo-router';
-import { useMemo, useRef, useState } from 'react';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -24,6 +24,7 @@ import MapView, {
 } from 'react-native-maps';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { WineIndicatorBadge } from '@/components/discover/WineIndicatorBadge';
 import { usePreferences } from '@/hooks/usePreferences';
 import { useAnalyzeRestaurants } from '@/hooks/useRestaurantAi';
 import { useRestaurantSearch } from '@/hooks/useRestaurantSearch';
@@ -41,6 +42,7 @@ import { useTheme, type ThemeColors } from '@/theme/ThemeProvider';
 import { typography } from '@/theme/typography';
 import type {
   RestaurantAiOccasion,
+  RestaurantQualityMode,
   RestaurantRecord,
   RestaurantViewMode,
 } from '@/types/restaurant';
@@ -74,9 +76,16 @@ const RATING_FILTERS: FilterOption<number | null>[] = [
 
 const DISTANCE_FILTERS: FilterOption<number>[] = [
   { label: '1 km', value: 1000 },
+  { label: '3 km', value: 3000 },
   { label: '5 km', value: 5000 },
   { label: '10 km', value: 10000 },
   { label: '25 km', value: 25000 },
+];
+
+const QUALITY_FILTERS: FilterOption<RestaurantQualityMode>[] = [
+  { label: 'Smart empfohlen', value: 'smart' },
+  { label: 'Sehr streng', value: 'strict' },
+  { label: 'Aus', value: 'off' },
 ];
 
 const CUISINE_FILTERS: FilterOption<string | null>[] = [
@@ -167,6 +176,56 @@ function getPriceLabel(value: string | null) {
   return value ?? 'Preis offen';
 }
 
+function getCuisineLabel(value: string | null) {
+  return CUISINE_FILTERS.find((option) => option.value === value)?.label ?? 'Alle';
+}
+
+function getDistanceLabel(value: number) {
+  return DISTANCE_FILTERS.find((option) => option.value === value)?.label ?? '5 km';
+}
+
+function getQualityLabel(value: RestaurantQualityMode) {
+  switch (value) {
+    case 'off':
+      return 'Qualität aus';
+    case 'strict':
+      return 'Sehr streng';
+    case 'smart':
+      return 'Smart';
+  }
+}
+
+function normalizeRestaurantViewMode(value: string | string[] | undefined) {
+  const normalizedValue = Array.isArray(value) ? value[0] : value;
+
+  return normalizedValue === 'list' || normalizedValue === 'map'
+    ? normalizedValue
+    : null;
+}
+
+function getRestaurantInitial(restaurant: Pick<RestaurantRecord, 'name'>) {
+  return restaurant.name.trim().slice(0, 1).toLocaleUpperCase('de-DE') || 'O';
+}
+
+function getQualityTone(
+  restaurant: Pick<RestaurantRecord, 'isOpenNow' | 'qualityScore'>,
+  colors: ThemeColors
+) {
+  if (restaurant.isOpenNow === false) {
+    return colors.textSecondary;
+  }
+
+  if ((restaurant.qualityScore ?? 0) >= 88) {
+    return colors.success;
+  }
+
+  if ((restaurant.qualityScore ?? 0) >= 76) {
+    return colors.primary;
+  }
+
+  return colors.warning;
+}
+
 function buildMapPoints(restaurants: RestaurantRecord[]): MapPoint[] {
   if (restaurants.length <= 15) {
     return restaurants.map((restaurant) => ({
@@ -223,6 +282,7 @@ function buildMapPoints(restaurants: RestaurantRecord[]): MapPoint[] {
 export default function DiscoverScreen() {
   const mapRef = useRef<MapView | null>(null);
   const router = useRouter();
+  const params = useLocalSearchParams<{ preferredView?: string }>();
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const preferencesQuery = usePreferences();
@@ -254,6 +314,9 @@ export default function DiscoverScreen() {
   const [radiusMeters, setRadiusMeters] = useState(
     discoveryPreferences.radius_meters
   );
+  const [qualityMode, setQualityMode] = useState<RestaurantQualityMode>(
+    discoveryPreferences.quality_mode
+  );
   const [cuisineType, setCuisineType] = useState<string | null>(
     discoveryPreferences.cuisine_type
   );
@@ -262,15 +325,17 @@ export default function DiscoverScreen() {
   const [isRequestingLocation, setIsRequestingLocation] = useState(false);
   const [isSearchingCity, setIsSearchingCity] = useState(false);
   const [isAiSheetOpen, setIsAiSheetOpen] = useState(false);
+  const [isFilterSheetOpen, setIsFilterSheetOpen] = useState(false);
   const hasMapsKey = Boolean(env.GOOGLE_MAPS_IOS_KEY);
   const filters = useMemo(
     () => ({
       cuisineTypes: cuisineType ? [cuisineType] : undefined,
       minRating: minRating ?? undefined,
       openNow: openNowOnly,
+      qualityMode,
       radiusMeters,
     }),
-    [cuisineType, minRating, openNowOnly, radiusMeters]
+    [cuisineType, minRating, openNowOnly, qualityMode, radiusMeters]
   );
   const restaurantQuery = useRestaurantSearch({
     bounds: getBoundsFromRegion(searchRegion),
@@ -296,15 +361,33 @@ export default function DiscoverScreen() {
   const source = restaurantQuery.data?.source ?? 'fallback';
   const activeFilterSummary = [
     openNowOnly ? 'Offen' : null,
+    getQualityLabel(qualityMode),
     minRating ? `${String(minRating).replace('.', ',')}+` : null,
-    DISTANCE_FILTERS.find((option) => option.value === radiusMeters)?.label,
-    CUISINE_FILTERS.find((option) => option.value === cuisineType)?.label,
+    getDistanceLabel(radiusMeters),
+    cuisineType ? getCuisineLabel(cuisineType) : null,
   ].filter(Boolean);
+  const hasCustomFilters =
+    openNowOnly ||
+    minRating !== null ||
+    radiusMeters !== 5000 ||
+    qualityMode !== 'smart' ||
+    cuisineType !== null;
   const canUseAiRecommendation =
     mode === 'search' &&
     source === 'google_places' &&
     restaurants.length > 0 &&
     !restaurantQuery.isLoading;
+
+  useEffect(() => {
+    const preferredView = normalizeRestaurantViewMode(params.preferredView);
+
+    if (!preferredView || preferredView === viewMode) {
+      return;
+    }
+
+    setMode('search');
+    setViewMode(preferredView);
+  }, [params.preferredView, viewMode]);
 
   function persistDiscoveryPreference(
     nextPreference: Partial<
@@ -318,6 +401,7 @@ export default function DiscoverScreen() {
         min_rating: minRating,
         open_now: openNowOnly,
         preferred_view: viewMode,
+        quality_mode: qualityMode,
         radius_meters: radiusMeters,
         ...nextPreference,
       })
@@ -429,11 +513,13 @@ export default function DiscoverScreen() {
     setOpenNowOnly(false);
     setMinRating(null);
     setRadiusMeters(5000);
+    setQualityMode('smart');
     setCuisineType(null);
     persistDiscoveryPreference({
       cuisine_type: null,
       min_rating: null,
       open_now: false,
+      quality_mode: 'smart',
       radius_meters: 5000,
     });
   }
@@ -451,6 +537,11 @@ export default function DiscoverScreen() {
   function updateRadiusFilter(nextValue: number) {
     setRadiusMeters(nextValue);
     persistDiscoveryPreference({ radius_meters: nextValue });
+  }
+
+  function updateQualityFilter(nextValue: RestaurantQualityMode) {
+    setQualityMode(nextValue);
+    persistDiscoveryPreference({ quality_mode: nextValue });
   }
 
   function updateCuisineFilter(nextValue: string | null) {
@@ -521,6 +612,8 @@ export default function DiscoverScreen() {
         provider: restaurant.provider,
         providerPlaceId: restaurant.providerPlaceId,
         restaurantId: restaurant.id,
+        returnTo: 'discover',
+        returnView: viewMode,
       },
     });
   }
@@ -596,24 +689,55 @@ export default function DiscoverScreen() {
           }
 
           const isSelected = selectedRestaurant?.id === point.restaurant.id;
+          const markerColor = getQualityTone(point.restaurant, colors);
 
           return (
             <Marker
               coordinate={point.coordinate}
               key={point.restaurant.id}
               onPress={() => setSelectedRestaurant(point.restaurant)}
-              tracksViewChanges={false}
+              tracksViewChanges={isSelected}
             >
-              <View
-                style={[
-                  styles.restaurantMarker,
-                  point.restaurant.isOpenNow === false &&
-                    styles.restaurantMarkerClosed,
-                  isSelected && styles.restaurantMarkerSelected,
-                ]}
-              >
-                <Ionicons color={colors.white} name="restaurant" size={15} />
-              </View>
+              {isSelected ? (
+                <View style={styles.selectedMarker}>
+                  {point.restaurant.photoUrl ? (
+                    <Image
+                      cachePolicy="memory-disk"
+                      contentFit="cover"
+                      source={{ uri: point.restaurant.photoUrl }}
+                      style={styles.selectedMarkerImage}
+                    />
+                  ) : (
+                    <View style={styles.selectedMarkerFallback}>
+                      <Text style={styles.selectedMarkerInitial}>
+                        {getRestaurantInitial(point.restaurant)}
+                      </Text>
+                    </View>
+                  )}
+                  <View style={styles.selectedMarkerScore}>
+                    <Text style={styles.selectedMarkerScoreText}>
+                      {point.restaurant.qualityScore ?? formatRating(point.restaurant.rating)}
+                    </Text>
+                  </View>
+                </View>
+              ) : (
+                <View
+                  style={[
+                    styles.restaurantMarker,
+                    { backgroundColor: markerColor },
+                  ]}
+                >
+                  <Ionicons
+                    color={colors.white}
+                    name={
+                      point.restaurant.wineProfile?.isFullWineProfile
+                        ? 'wine-outline'
+                        : 'restaurant'
+                    }
+                    size={15}
+                  />
+                </View>
+              )}
             </Marker>
           );
         })}
@@ -718,88 +842,42 @@ export default function DiscoverScreen() {
               </View>
             </View>
 
-            <ScrollView
-              contentContainerStyle={styles.filterContent}
-              horizontal
-              showsHorizontalScrollIndicator={false}
-            >
+            <View style={styles.filterBar}>
               <Pressable
-                onPress={() => updateOpenNowFilter(!openNowOnly)}
-                style={[
-                  styles.filterChip,
-                  openNowOnly && styles.filterChipActive,
-                ]}
+                onPress={() => setIsFilterSheetOpen(true)}
+                style={styles.filterSummaryButton}
               >
-                <View
-                  style={[
-                    styles.openDot,
-                    openNowOnly && { backgroundColor: colors.white },
-                  ]}
-                />
-                <Text
-                  style={[
-                    styles.filterChipText,
-                    openNowOnly && styles.filterChipTextActive,
-                  ]}
-                >
-                  Jetzt offen
-                </Text>
-              </Pressable>
-              {RATING_FILTERS.map((option) => (
-                <FilterChip
-                  active={minRating === option.value}
-                  key={`rating-${option.label}`}
-                  label={option.label}
-                  onPress={() => updateMinRatingFilter(option.value)}
-                  styles={styles}
-                />
-              ))}
-              {DISTANCE_FILTERS.map((option) => (
-                <FilterChip
-                  active={radiusMeters === option.value}
-                  key={`distance-${option.value}`}
-                  label={option.label}
-                  onPress={() => updateRadiusFilter(option.value)}
-                  styles={styles}
-                />
-              ))}
-              {CUISINE_FILTERS.map((option) => (
-                <FilterChip
-                  active={cuisineType === option.value}
-                  key={`cuisine-${option.label}`}
-                  label={option.label}
-                  onPress={() => updateCuisineFilter(option.value)}
-                  styles={styles}
-                />
-              ))}
-              {activeFilterSummary.length > 1 && (
-                <Pressable onPress={resetFilters} style={styles.resetChip}>
-                  <Text style={styles.resetChipText}>Zurücksetzen</Text>
-                </Pressable>
-              )}
-            </ScrollView>
-
-            {canUseAiRecommendation ? (
-              <Pressable
-                onPress={() => setIsAiSheetOpen(true)}
-                style={styles.aiRecommendationButton}
-              >
-                <View style={styles.aiRecommendationIcon}>
-                  <Ionicons color={colors.white} name="sparkles" size={18} />
+                <View style={styles.filterSummaryIcon}>
+                  <Ionicons color={colors.primary} name="options" size={18} />
                 </View>
-                <View style={styles.aiRecommendationTextWrap}>
-                  <Text style={styles.aiRecommendationTitle}>
-                    KI-Empfehlung
-                  </Text>
-                  <Text numberOfLines={1} style={styles.aiRecommendationText}>
-                    Top-Auswahl mit Begründung kuratieren
+                <View style={styles.filterSummaryCopy}>
+                  <Text style={styles.filterSummaryTitle}>Filter</Text>
+                  <Text numberOfLines={1} style={styles.filterSummaryText}>
+                    {activeFilterSummary.join(' · ')}
                   </Text>
                 </View>
                 <Ionicons
-                  color={colors.primary}
-                  name="chevron-forward"
-                  size={20}
+                  color={colors.textSecondary}
+                  name="chevron-down"
+                  size={18}
                 />
+              </Pressable>
+              {canUseAiRecommendation ? (
+                <Pressable
+                  accessibilityLabel="KI-Empfehlung öffnen"
+                  onPress={() => setIsAiSheetOpen(true)}
+                  style={styles.aiCompactButton}
+                >
+                  <Ionicons color={colors.white} name="sparkles" size={17} />
+                  <Text style={styles.aiCompactText}>KI</Text>
+                </Pressable>
+              ) : null}
+            </View>
+
+            {hasCustomFilters ? (
+              <Pressable onPress={resetFilters} style={styles.quickResetButton}>
+                <Ionicons color={colors.primary} name="refresh" size={15} />
+                <Text style={styles.quickResetText}>Filter zurücksetzen</Text>
               </Pressable>
             ) : null}
           </>
@@ -826,6 +904,19 @@ export default function DiscoverScreen() {
               <Text style={styles.mapLoadingText}>Restaurants laden</Text>
             </View>
           )}
+          {!restaurantQuery.isLoading && restaurants.length === 0 ? (
+            <View style={styles.mapEmptyCard}>
+              <Text style={styles.mapEmptyTitle}>Keine Treffer im Bereich</Text>
+              <Text style={styles.mapEmptyText}>
+                {qualityMode === 'strict'
+                  ? 'Die strenge Qualitätssuche findet hier gerade zu wenige starke Orte.'
+                  : 'Suche in einem größeren Bereich oder passe die Filter an.'}
+              </Text>
+              <Pressable onPress={resetFilters} style={styles.mapEmptyButton}>
+                <Text style={styles.mapEmptyButtonText}>Filter lockern</Text>
+              </Pressable>
+            </View>
+          ) : null}
           {selectedRestaurant && (
             <RestaurantPreview
               isSaved={savedRestaurants.isSaved(selectedRestaurant)}
@@ -844,6 +935,13 @@ export default function DiscoverScreen() {
               ? 'Noch keine Restaurants gemerkt'
               : 'Keine Restaurants gefunden'
           }
+          emptyDescription={
+            mode === 'saved'
+              ? 'Markiere gute Orte mit dem Herz, dann findest du sie hier wieder.'
+              : qualityMode === 'strict'
+                ? 'Die strenge Qualitätssuche findet hier gerade zu wenige starke Treffer. Locke die Filter oder erhöhe den Umkreis.'
+                : 'Versuche einen größeren Umkreis oder eine andere Küche.'
+          }
           isLoading={
             mode === 'saved'
               ? savedRestaurants.query.isLoading
@@ -851,6 +949,7 @@ export default function DiscoverScreen() {
           }
           onDetail={openRestaurantDetail}
           onNavigate={openNavigation}
+          onResetFilters={mode === 'search' ? resetFilters : undefined}
           onSave={(restaurant) => void toggleSaved(restaurant)}
           restaurants={displayedRestaurants}
           savedRestaurants={savedRestaurants}
@@ -866,7 +965,204 @@ export default function DiscoverScreen() {
         restaurants={restaurants}
         styles={styles}
       />
+      <RestaurantFilterSheet
+        cuisineType={cuisineType}
+        isOpen={isFilterSheetOpen}
+        minRating={minRating}
+        onClose={() => setIsFilterSheetOpen(false)}
+        onCuisineChange={updateCuisineFilter}
+        onMinRatingChange={updateMinRatingFilter}
+        onOpenNowChange={updateOpenNowFilter}
+        onQualityChange={updateQualityFilter}
+        onRadiusChange={updateRadiusFilter}
+        onReset={resetFilters}
+        openNowOnly={openNowOnly}
+        qualityMode={qualityMode}
+        radiusMeters={radiusMeters}
+        styles={styles}
+      />
     </SafeAreaView>
+  );
+}
+
+function RestaurantFilterSheet({
+  cuisineType,
+  isOpen,
+  minRating,
+  onClose,
+  onCuisineChange,
+  onMinRatingChange,
+  onOpenNowChange,
+  onQualityChange,
+  onRadiusChange,
+  onReset,
+  openNowOnly,
+  qualityMode,
+  radiusMeters,
+  styles,
+}: {
+  cuisineType: string | null;
+  isOpen: boolean;
+  minRating: number | null;
+  onClose: () => void;
+  onCuisineChange: (value: string | null) => void;
+  onMinRatingChange: (value: number | null) => void;
+  onOpenNowChange: (value: boolean) => void;
+  onQualityChange: (value: RestaurantQualityMode) => void;
+  onRadiusChange: (value: number) => void;
+  onReset: () => void;
+  openNowOnly: boolean;
+  qualityMode: RestaurantQualityMode;
+  radiusMeters: number;
+  styles: ReturnType<typeof makeStyles>;
+}) {
+  const { colors } = useTheme();
+
+  return (
+    <Modal animationType="slide" onRequestClose={onClose} transparent visible={isOpen}>
+      <View style={styles.aiModalBackdrop}>
+        <View style={styles.filterSheet}>
+          <View style={styles.aiSheetHeader}>
+            <View>
+              <Text style={styles.aiSheetEyebrow}>Suche</Text>
+              <Text style={styles.aiSheetTitle}>Verfeinern</Text>
+            </View>
+            <Pressable onPress={onClose} style={styles.aiCloseButton}>
+              <Ionicons color={colors.text} name="close" size={22} />
+            </Pressable>
+          </View>
+
+          <ScrollView
+            contentContainerStyle={styles.filterSheetContent}
+            showsVerticalScrollIndicator={false}
+          >
+            <View style={styles.filterSheetTopRow}>
+              <Text style={styles.filterSheetHint}>
+                Qualität und Umkreis bestimmen, was zuerst erscheint.
+              </Text>
+              <Pressable onPress={onReset} style={styles.filterResetButton}>
+                <Text style={styles.filterResetText}>Reset</Text>
+              </Pressable>
+            </View>
+
+            <FilterGroup title="Umkreis" styles={styles}>
+              {DISTANCE_FILTERS.map((option) => (
+                <FilterChoice
+                  active={radiusMeters === option.value}
+                  key={option.value}
+                  label={option.label}
+                  onPress={() => onRadiusChange(option.value)}
+                  styles={styles}
+                />
+              ))}
+            </FilterGroup>
+
+            <FilterGroup title="Qualität" styles={styles}>
+              {QUALITY_FILTERS.map((option) => (
+                <FilterChoice
+                  active={qualityMode === option.value}
+                  key={option.value}
+                  label={option.label}
+                  onPress={() => onQualityChange(option.value)}
+                  styles={styles}
+                />
+              ))}
+            </FilterGroup>
+
+            <FilterGroup title="Bewertung" styles={styles}>
+              {RATING_FILTERS.map((option) => (
+                <FilterChoice
+                  active={minRating === option.value}
+                  key={option.label}
+                  label={option.label}
+                  onPress={() => onMinRatingChange(option.value)}
+                  styles={styles}
+                />
+              ))}
+            </FilterGroup>
+
+            <FilterGroup title="Küche" styles={styles}>
+              {CUISINE_FILTERS.map((option) => (
+                <FilterChoice
+                  active={cuisineType === option.value}
+                  key={option.label}
+                  label={option.label}
+                  onPress={() => onCuisineChange(option.value)}
+                  styles={styles}
+                />
+              ))}
+            </FilterGroup>
+
+            <Pressable
+              onPress={() => onOpenNowChange(!openNowOnly)}
+              style={[
+                styles.openNowSheetToggle,
+                openNowOnly && styles.openNowSheetToggleActive,
+              ]}
+            >
+              <View
+                style={[
+                  styles.openDot,
+                  openNowOnly && { backgroundColor: colors.white },
+                ]}
+              />
+              <Text
+                style={[
+                  styles.openNowSheetText,
+                  openNowOnly && styles.openNowSheetTextActive,
+                ]}
+              >
+                Nur aktuell geöffnete Restaurants
+              </Text>
+            </Pressable>
+
+            <Pressable onPress={onClose} style={styles.filterApplyButton}>
+              <Text style={styles.filterApplyText}>Anwenden</Text>
+            </Pressable>
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+function FilterGroup({
+  children,
+  styles,
+  title,
+}: {
+  children: ReactNode;
+  styles: ReturnType<typeof makeStyles>;
+  title: string;
+}) {
+  return (
+    <View style={styles.filterGroup}>
+      <Text style={styles.filterGroupTitle}>{title}</Text>
+      <View style={styles.filterChoiceWrap}>{children}</View>
+    </View>
+  );
+}
+
+function FilterChoice({
+  active,
+  label,
+  onPress,
+  styles,
+}: {
+  active: boolean;
+  label: string;
+  onPress: () => void;
+  styles: ReturnType<typeof makeStyles>;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={[styles.filterChoice, active && styles.filterChoiceActive]}
+    >
+      <Text style={[styles.filterChoiceText, active && styles.filterChoiceTextActive]}>
+        {label}
+      </Text>
+    </Pressable>
   );
 }
 
@@ -1038,43 +1334,24 @@ function ViewModeButton({
   );
 }
 
-function FilterChip({
-  active,
-  label,
-  onPress,
-  styles,
-}: {
-  active: boolean;
-  label: string;
-  onPress: () => void;
-  styles: ReturnType<typeof makeStyles>;
-}) {
-  return (
-    <Pressable
-      onPress={onPress}
-      style={[styles.filterChip, active && styles.filterChipActive]}
-    >
-      <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>
-        {label}
-      </Text>
-    </Pressable>
-  );
-}
-
 function RestaurantList({
+  emptyDescription,
   emptyLabel,
   isLoading,
   onDetail,
   onNavigate,
+  onResetFilters,
   onSave,
   restaurants,
   savedRestaurants,
   styles,
 }: {
+  emptyDescription: string;
   emptyLabel: string;
   isLoading: boolean;
   onDetail: (restaurant: RestaurantRecord) => void;
   onNavigate: (restaurant: RestaurantRecord) => void;
+  onResetFilters?: () => void;
   onSave: (restaurant: RestaurantRecord) => void;
   restaurants: RestaurantRecord[];
   savedRestaurants: ReturnType<typeof useSavedRestaurants>;
@@ -1093,6 +1370,12 @@ function RestaurantList({
       <View style={styles.emptyState}>
         <Ionicons name="restaurant-outline" size={30} style={styles.emptyIcon} />
         <Text style={styles.emptyTitle}>{emptyLabel}</Text>
+        <Text style={styles.emptyText}>{emptyDescription}</Text>
+        {onResetFilters ? (
+          <Pressable onPress={onResetFilters} style={styles.emptyAction}>
+            <Text style={styles.emptyActionText}>Filter lockern</Text>
+          </Pressable>
+        ) : null}
       </View>
     );
   }
@@ -1150,9 +1433,7 @@ function RestaurantCard({
             style={styles.restaurantImage}
           />
         ) : (
-          <View style={styles.restaurantImageFallback}>
-            <Ionicons name="wine" size={24} style={styles.restaurantImageIcon} />
-          </View>
+          <RestaurantImageFallback restaurant={restaurant} styles={styles} />
         )}
       </View>
       <View style={styles.restaurantInfo}>
@@ -1165,11 +1446,21 @@ function RestaurantCard({
             <Text style={styles.ratingText}>{formatRating(restaurant.rating)}</Text>
           </View>
         </View>
+        <WineIndicatorBadge profile={restaurant.wineProfile} />
         <Text numberOfLines={1} style={styles.restaurantMeta}>
           {[restaurant.cuisine, distance, getPriceLabel(restaurant.priceLevel)]
             .filter(Boolean)
             .join(' · ')}
         </Text>
+        {restaurant.qualityLabel ? (
+          <View style={styles.qualityInline}>
+            <Ionicons name="checkmark-circle" size={14} style={styles.qualityIcon} />
+            <Text numberOfLines={1} style={styles.qualityText}>
+              {restaurant.qualityLabel}
+              {restaurant.qualityScore ? ` · ${restaurant.qualityScore}` : ''}
+            </Text>
+          </View>
+        ) : null}
         <Text numberOfLines={1} style={styles.restaurantAddress}>
           {restaurant.address ?? 'Adresse wird geladen'}
         </Text>
@@ -1209,6 +1500,25 @@ function RestaurantCard({
         </View>
       </View>
     </Pressable>
+  );
+}
+
+function RestaurantImageFallback({
+  restaurant,
+  styles,
+}: {
+  restaurant: RestaurantRecord;
+  styles: ReturnType<typeof makeStyles>;
+}) {
+  return (
+    <View style={styles.restaurantImageFallback}>
+      <Text style={styles.restaurantImageInitial}>
+        {getRestaurantInitial(restaurant)}
+      </Text>
+      <Text numberOfLines={1} style={styles.restaurantImageCuisine}>
+        {restaurant.cuisine ?? 'Ort'}
+      </Text>
+    </View>
   );
 }
 
@@ -1307,6 +1617,20 @@ function makeStyles(colors: ThemeColors) {
     aiPhotoTileLarge: {
       height: 112,
       width: 112,
+    },
+    aiCompactButton: {
+      alignItems: 'center',
+      backgroundColor: colors.primary,
+      borderRadius: radii.pill,
+      flexDirection: 'row',
+      gap: spacing.xs,
+      minHeight: 44,
+      paddingHorizontal: spacing.md,
+    },
+    aiCompactText: {
+      color: colors.white,
+      fontSize: typography.size.sm,
+      fontWeight: typography.weight.black,
     },
     aiRecommendationButton: {
       alignItems: 'center',
@@ -1407,9 +1731,24 @@ function makeStyles(colors: ThemeColors) {
       fontWeight: typography.weight.extraBold,
     },
     controls: {
-      gap: spacing.sm,
+      gap: spacing.xs,
       paddingHorizontal: spacing.screenX,
-      paddingVertical: spacing.md,
+      paddingBottom: spacing.xs,
+      paddingTop: spacing.xs,
+    },
+    emptyAction: {
+      alignItems: 'center',
+      backgroundColor: colors.primary,
+      borderRadius: radii.pill,
+      minHeight: 42,
+      justifyContent: 'center',
+      marginTop: spacing.sm,
+      paddingHorizontal: spacing.lg,
+    },
+    emptyActionText: {
+      color: colors.white,
+      fontSize: typography.size.sm,
+      fontWeight: typography.weight.black,
     },
     emptyIcon: {
       color: colors.primary,
@@ -1425,6 +1764,12 @@ function makeStyles(colors: ThemeColors) {
       color: colors.text,
       fontSize: typography.size.lg,
       fontWeight: typography.weight.black,
+      textAlign: 'center',
+    },
+    emptyText: {
+      color: colors.textSecondary,
+      fontSize: typography.size.md,
+      lineHeight: typography.lineHeight.md,
       textAlign: 'center',
     },
     eyebrow: {
@@ -1456,16 +1801,139 @@ function makeStyles(colors: ThemeColors) {
     filterChipTextActive: {
       color: colors.white,
     },
+    filterApplyButton: {
+      alignItems: 'center',
+      backgroundColor: colors.primary,
+      borderRadius: radii.pill,
+      justifyContent: 'center',
+      minHeight: 48,
+    },
+    filterApplyText: {
+      color: colors.white,
+      fontSize: typography.size.md,
+      fontWeight: typography.weight.black,
+    },
+    filterBar: {
+      alignItems: 'center',
+      flexDirection: 'row',
+      gap: spacing.sm,
+    },
+    filterChoice: {
+      alignItems: 'center',
+      backgroundColor: colors.surfaceWarm,
+      borderColor: colors.border,
+      borderRadius: radii.pill,
+      borderWidth: 1,
+      minHeight: 38,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+    },
+    filterChoiceActive: {
+      backgroundColor: colors.primary,
+      borderColor: colors.primary,
+    },
+    filterChoiceText: {
+      color: colors.textSecondary,
+      fontSize: typography.size.sm,
+      fontWeight: typography.weight.bold,
+    },
+    filterChoiceTextActive: {
+      color: colors.white,
+    },
+    filterChoiceWrap: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: spacing.sm,
+    },
     filterContent: {
       gap: spacing.sm,
       paddingRight: spacing.screenX,
     },
+    filterGroup: {
+      gap: spacing.sm,
+    },
+    filterGroupTitle: {
+      color: colors.text,
+      fontSize: typography.size.sm,
+      fontWeight: typography.weight.black,
+      textTransform: 'uppercase',
+    },
+    filterResetButton: {
+      alignItems: 'center',
+      borderColor: colors.border,
+      borderRadius: radii.pill,
+      borderWidth: 1,
+      justifyContent: 'center',
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+    },
+    filterResetText: {
+      color: colors.primary,
+      fontSize: typography.size.sm,
+      fontWeight: typography.weight.bold,
+    },
+    filterSheet: {
+      backgroundColor: colors.background,
+      borderTopLeftRadius: radii.lg,
+      borderTopRightRadius: radii.lg,
+      gap: spacing.lg,
+      maxHeight: '88%',
+      padding: spacing.xl,
+    },
+    filterSheetContent: {
+      gap: spacing.lg,
+    },
+    filterSheetHint: {
+      color: colors.textSecondary,
+      flex: 1,
+      fontSize: typography.size.sm,
+      lineHeight: typography.lineHeight.sm,
+    },
+    filterSheetTopRow: {
+      alignItems: 'center',
+      flexDirection: 'row',
+      gap: spacing.md,
+    },
+    filterSummaryButton: {
+      alignItems: 'center',
+      backgroundColor: colors.surface,
+      borderColor: colors.border,
+      borderRadius: radii.pill,
+      borderWidth: 1,
+      flex: 1,
+      flexDirection: 'row',
+      gap: spacing.sm,
+      minHeight: 46,
+      paddingHorizontal: spacing.md,
+    },
+    filterSummaryCopy: {
+      flex: 1,
+      gap: 2,
+    },
+    filterSummaryIcon: {
+      alignItems: 'center',
+      backgroundColor: colors.surfaceWarm,
+      borderRadius: radii.md,
+      height: 34,
+      justifyContent: 'center',
+      width: 34,
+    },
+    filterSummaryText: {
+      color: colors.textSecondary,
+      fontSize: typography.size.sm,
+      fontWeight: typography.weight.bold,
+    },
+    filterSummaryTitle: {
+      color: colors.text,
+      fontSize: typography.size.sm,
+      fontWeight: typography.weight.black,
+    },
     header: {
-      alignItems: 'flex-start',
+      alignItems: 'center',
       flexDirection: 'row',
       justifyContent: 'space-between',
       paddingHorizontal: spacing.screenX,
-      paddingTop: spacing.md,
+      paddingTop: spacing.sm,
     },
     listContent: {
       gap: spacing.md,
@@ -1495,6 +1963,46 @@ function makeStyles(colors: ThemeColors) {
     },
     map: {
       flex: 1,
+    },
+    mapEmptyButton: {
+      alignItems: 'center',
+      alignSelf: 'flex-start',
+      backgroundColor: colors.primary,
+      borderRadius: radii.pill,
+      minHeight: 38,
+      justifyContent: 'center',
+      paddingHorizontal: spacing.md,
+    },
+    mapEmptyButtonText: {
+      color: colors.white,
+      fontSize: typography.size.sm,
+      fontWeight: typography.weight.black,
+    },
+    mapEmptyCard: {
+      backgroundColor: colors.surface,
+      borderColor: colors.border,
+      borderRadius: radii.lg,
+      borderWidth: 1,
+      gap: spacing.sm,
+      left: spacing.md,
+      padding: spacing.md,
+      position: 'absolute',
+      right: spacing.md,
+      top: spacing.lg,
+      shadowColor: colors.shadow,
+      shadowOffset: { height: 8, width: 0 },
+      shadowOpacity: 0.08,
+      shadowRadius: 16,
+    },
+    mapEmptyText: {
+      color: colors.textSecondary,
+      fontSize: typography.size.sm,
+      lineHeight: typography.lineHeight.sm,
+    },
+    mapEmptyTitle: {
+      color: colors.text,
+      fontSize: typography.size.md,
+      fontWeight: typography.weight.black,
     },
     mapLoading: {
       alignItems: 'center',
@@ -1557,8 +2065,32 @@ function makeStyles(colors: ThemeColors) {
       height: 10,
       width: 10,
     },
+    openNowSheetText: {
+      color: colors.text,
+      flex: 1,
+      fontSize: typography.size.md,
+      fontWeight: typography.weight.bold,
+    },
+    openNowSheetTextActive: {
+      color: colors.white,
+    },
+    openNowSheetToggle: {
+      alignItems: 'center',
+      backgroundColor: colors.surface,
+      borderColor: colors.border,
+      borderRadius: radii.lg,
+      borderWidth: 1,
+      flexDirection: 'row',
+      gap: spacing.sm,
+      minHeight: 50,
+      paddingHorizontal: spacing.md,
+    },
+    openNowSheetToggleActive: {
+      backgroundColor: colors.primary,
+      borderColor: colors.primary,
+    },
     previewCard: {
-      bottom: spacing.lg,
+      bottom: spacing.md,
       left: spacing.md,
       position: 'absolute',
       right: spacing.md,
@@ -1596,6 +2128,32 @@ function makeStyles(colors: ThemeColors) {
       fontSize: typography.size.sm,
       fontWeight: typography.weight.extraBold,
     },
+    qualityIcon: {
+      color: colors.success,
+    },
+    qualityInline: {
+      alignItems: 'center',
+      flexDirection: 'row',
+      gap: spacing.xs,
+    },
+    qualityText: {
+      color: colors.textSecondary,
+      fontSize: typography.size.sm,
+      fontWeight: typography.weight.bold,
+    },
+    quickResetButton: {
+      alignItems: 'center',
+      alignSelf: 'flex-start',
+      flexDirection: 'row',
+      gap: spacing.xs,
+      paddingHorizontal: spacing.xs,
+      paddingVertical: spacing.xs,
+    },
+    quickResetText: {
+      color: colors.primary,
+      fontSize: typography.size.sm,
+      fontWeight: typography.weight.bold,
+    },
     resetChip: {
       alignItems: 'center',
       borderColor: colors.primary,
@@ -1609,6 +2167,16 @@ function makeStyles(colors: ThemeColors) {
       color: colors.primary,
       fontSize: typography.size.sm,
       fontWeight: typography.weight.bold,
+    },
+    resetIconButton: {
+      alignItems: 'center',
+      backgroundColor: colors.surface,
+      borderColor: colors.border,
+      borderRadius: radii.pill,
+      borderWidth: 1,
+      height: 46,
+      justifyContent: 'center',
+      width: 46,
     },
     restaurantActions: {
       flexDirection: 'row',
@@ -1642,10 +2210,23 @@ function makeStyles(colors: ThemeColors) {
       alignItems: 'center',
       backgroundColor: colors.surfaceWarm,
       flex: 1,
+      gap: spacing.xs,
       justifyContent: 'center',
+      padding: spacing.xs,
+    },
+    restaurantImageCuisine: {
+      color: colors.textSecondary,
+      fontSize: typography.size.xs,
+      fontWeight: typography.weight.bold,
+      textAlign: 'center',
     },
     restaurantImageIcon: {
       color: colors.primary,
+    },
+    restaurantImageInitial: {
+      color: colors.primary,
+      fontSize: typography.size.xl,
+      fontWeight: typography.weight.black,
     },
     restaurantImageWrap: {
       borderColor: colors.border,
@@ -1732,7 +2313,7 @@ function makeStyles(colors: ThemeColors) {
       flex: 1,
       fontSize: typography.size.base,
       fontWeight: typography.weight.bold,
-      minHeight: 46,
+      minHeight: 42,
     },
     searchRow: {
       alignItems: 'center',
@@ -1763,6 +2344,53 @@ function makeStyles(colors: ThemeColors) {
       color: colors.text,
       fontSize: typography.size.sm,
       fontWeight: typography.weight.bold,
+    },
+    selectedMarker: {
+      alignItems: 'center',
+      backgroundColor: colors.surface,
+      borderColor: colors.white,
+      borderRadius: radii.md,
+      borderWidth: 2,
+      height: 50,
+      justifyContent: 'center',
+      overflow: 'hidden',
+      shadowColor: colors.shadow,
+      shadowOffset: { height: 5, width: 0 },
+      shadowOpacity: 0.25,
+      shadowRadius: 8,
+      width: 50,
+    },
+    selectedMarkerImage: {
+      height: '100%',
+      width: '100%',
+    },
+    selectedMarkerFallback: {
+      alignItems: 'center',
+      backgroundColor: colors.surfaceWarm,
+      height: '100%',
+      justifyContent: 'center',
+      width: '100%',
+    },
+    selectedMarkerInitial: {
+      color: colors.primary,
+      fontSize: typography.size.lg,
+      fontWeight: typography.weight.black,
+    },
+    selectedMarkerScore: {
+      alignItems: 'center',
+      backgroundColor: colors.primary,
+      borderRadius: radii.pill,
+      bottom: 3,
+      minWidth: 26,
+      paddingHorizontal: 5,
+      paddingVertical: 1,
+      position: 'absolute',
+      right: 3,
+    },
+    selectedMarkerScoreText: {
+      color: colors.white,
+      fontSize: typography.size.xs,
+      fontWeight: typography.weight.black,
     },
     segmentButton: {
       alignItems: 'center',
@@ -1800,14 +2428,15 @@ function makeStyles(colors: ThemeColors) {
     },
     sourceBadge: {
       alignItems: 'center',
-      backgroundColor: colors.surfaceWarm,
+      backgroundColor: colors.surface,
       borderColor: colors.border,
       borderRadius: radii.pill,
       borderWidth: 1,
       flexDirection: 'row',
       gap: spacing.xs,
-      paddingHorizontal: spacing.md,
-      paddingVertical: spacing.sm,
+      opacity: 0.86,
+      paddingHorizontal: spacing.sm,
+      paddingVertical: spacing.xs,
     },
     sourceBadgeText: {
       color: colors.textSecondary,
@@ -1816,9 +2445,9 @@ function makeStyles(colors: ThemeColors) {
     },
     title: {
       color: colors.text,
-      fontSize: typography.size.brand,
+      fontSize: typography.size.xl,
       fontWeight: typography.weight.black,
-      lineHeight: typography.lineHeight.brand,
+      lineHeight: typography.lineHeight.xl,
     },
     viewToggle: {
       backgroundColor: colors.surfaceWarm,

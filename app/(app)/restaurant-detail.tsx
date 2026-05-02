@@ -106,6 +106,10 @@ function formatRatingCount(value: number | null) {
   return `${value.toLocaleString('de-DE')} Bewertungen`;
 }
 
+function getRestaurantInitial(restaurant: Pick<RestaurantRecord, 'name'>) {
+  return restaurant.name.trim().slice(0, 1).toLocaleUpperCase('de-DE') || 'O';
+}
+
 function formatDate(value: string | null | undefined) {
   if (!value) {
     return 'Heute';
@@ -209,6 +213,8 @@ export default function RestaurantDetailScreen() {
     provider?: string;
     providerPlaceId?: string;
     restaurantId?: string;
+    returnTo?: string;
+    returnView?: string;
   }>();
   const center = useMemo<Coordinates | undefined>(() => {
     const lat = parseNumberParam(params.centerLat);
@@ -221,6 +227,8 @@ export default function RestaurantDetailScreen() {
   const provider = parseProvider(params.provider);
   const providerPlaceId = normalizeParam(params.providerPlaceId);
   const restaurantId = normalizeParam(params.restaurantId);
+  const shouldReturnToDiscover = normalizeParam(params.returnTo) === 'discover';
+  const returnView = normalizeParam(params.returnView) === 'list' ? 'list' : 'map';
   const detailQuery = useRestaurantDetail({
     center,
     provider,
@@ -245,6 +253,7 @@ export default function RestaurantDetailScreen() {
   });
   const [isRatingModalOpen, setIsRatingModalOpen] = useState(false);
   const [isVisitModalOpen, setIsVisitModalOpen] = useState(false);
+  const [isHoursExpanded, setIsHoursExpanded] = useState(false);
   const [ratingForm, setRatingForm] = useState<RatingFormState>(() =>
     createRatingFormState(null)
   );
@@ -258,6 +267,37 @@ export default function RestaurantDetailScreen() {
     [inventoryItems, restaurant]
   );
   const rating = ratingQuery.data?.rating ?? null;
+  const currentWeekday = useMemo(
+    () => new Intl.DateTimeFormat('de-DE', { weekday: 'long' }).format(new Date()),
+    []
+  );
+  const todayOpeningHour = useMemo(() => {
+    const hours = restaurant?.openingHoursText ?? [];
+
+    return (
+      hours.find((line) =>
+        line.toLocaleLowerCase('de-DE').startsWith(currentWeekday.toLocaleLowerCase('de-DE'))
+      ) ??
+      hours[0] ??
+      null
+    );
+  }, [currentWeekday, restaurant?.openingHoursText]);
+  const visibleOpeningHours =
+    isHoursExpanded || !todayOpeningHour
+      ? restaurant?.openingHoursText ?? []
+      : [todayOpeningHour];
+
+  function goBack() {
+    if (shouldReturnToDiscover) {
+      router.replace({
+        pathname: '/(app)/discover' as never,
+        params: { preferredView: returnView },
+      });
+      return;
+    }
+
+    router.back();
+  }
 
   const saveRatingMutation = useMutation({
     mutationFn: async () => {
@@ -343,7 +383,7 @@ export default function RestaurantDetailScreen() {
           <Text style={styles.emptyText}>
             Bitte öffne das Restaurant erneut aus dem Entdecken-Tab.
           </Text>
-          <Pressable onPress={() => router.back()} style={styles.primaryButton}>
+          <Pressable onPress={goBack} style={styles.primaryButton}>
             <Text style={styles.primaryButtonText}>Zurück</Text>
           </Pressable>
         </View>
@@ -443,7 +483,7 @@ export default function RestaurantDetailScreen() {
   return (
     <SafeAreaView edges={['top']} style={styles.screen}>
       <View style={styles.topBar}>
-        <Pressable onPress={() => router.back()} style={styles.iconButton}>
+        <Pressable onPress={goBack} style={styles.iconButton}>
           <Ionicons color={colors.text} name="chevron-back" size={26} />
         </Pressable>
         <View style={styles.topBarActions}>
@@ -474,7 +514,12 @@ export default function RestaurantDetailScreen() {
             />
           ) : (
             <View style={styles.heroFallback}>
-              <Ionicons color={colors.white} name="restaurant" size={42} />
+              <Text style={styles.heroFallbackInitial}>
+                {getRestaurantInitial(restaurant)}
+              </Text>
+              <Text numberOfLines={1} style={styles.heroFallbackCuisine}>
+                {restaurant.cuisine ?? 'Restaurant'}
+              </Text>
             </View>
           )}
           <View style={styles.heroOverlay}>
@@ -491,6 +536,15 @@ export default function RestaurantDetailScreen() {
                   : 'Jetzt offen oder unbekannt'}
               </Text>
             </View>
+            {restaurant.qualityLabel ? (
+              <View style={styles.heroQualityPill}>
+                <Ionicons color={colors.white} name="checkmark-circle" size={15} />
+                <Text style={styles.heroQualityText}>
+                  {restaurant.qualityLabel}
+                  {restaurant.qualityScore ? ` · ${restaurant.qualityScore}` : ''}
+                </Text>
+              </View>
+            ) : null}
             <Text style={styles.title}>{restaurant.name}</Text>
             <Text style={styles.subtitle}>
               {[restaurant.cuisine, restaurant.address].filter(Boolean).join(' · ') ||
@@ -553,6 +607,23 @@ export default function RestaurantDetailScreen() {
             value={restaurant.priceLevel ?? 'Offen'}
           />
         </View>
+
+        {restaurant.qualitySignals.length > 0 ? (
+          <Section title="Qualitätssignale" styles={styles}>
+            <View style={styles.signalWrap}>
+              {restaurant.qualitySignals.map((signal) => (
+                <View key={signal} style={styles.signalChip}>
+                  <Ionicons
+                    color={colors.success}
+                    name="checkmark-circle"
+                    size={15}
+                  />
+                  <Text style={styles.signalText}>{signal}</Text>
+                </View>
+              ))}
+            </View>
+          </Section>
+        ) : null}
 
         <Section title="KI-Einschätzung" styles={styles}>
           {latestAiQuery.data ? (
@@ -684,11 +755,29 @@ export default function RestaurantDetailScreen() {
         </Section>
 
         <Section title="Öffnungszeiten" styles={styles}>
-          {restaurant.openingHoursText.length > 0 ? (
-            <View style={styles.infoCard}>
-              {restaurant.openingHoursText.map((line) => (
-                <InfoRow key={line} label="" styles={styles} value={line} />
+          {visibleOpeningHours.length > 0 ? (
+            <View style={styles.hoursCard}>
+              {visibleOpeningHours.map((line) => (
+                <View key={line} style={styles.hourRow}>
+                  <Ionicons color={colors.primary} name="time-outline" size={18} />
+                  <Text style={styles.hourText}>{line}</Text>
+                </View>
               ))}
+              {restaurant.openingHoursText.length > 1 ? (
+                <Pressable
+                  onPress={() => setIsHoursExpanded((current) => !current)}
+                  style={styles.hoursToggle}
+                >
+                  <Text style={styles.hoursToggleText}>
+                    {isHoursExpanded ? 'Weniger anzeigen' : 'Alle Tage anzeigen'}
+                  </Text>
+                  <Ionicons
+                    color={colors.primary}
+                    name={isHoursExpanded ? 'chevron-up' : 'chevron-down'}
+                    size={16}
+                  />
+                </Pressable>
+              ) : null}
             </View>
           ) : (
             <Text style={styles.sectionHint}>Keine Öffnungszeiten verfügbar.</Text>
@@ -696,27 +785,35 @@ export default function RestaurantDetailScreen() {
         </Section>
 
         <Section title="Kontakt und Ort" styles={styles}>
-          <View style={styles.infoCard}>
-            <InfoRow
+          <View style={styles.contactGrid}>
+            <ContactItem
+              icon="location-outline"
               label="Adresse"
               styles={styles}
               value={restaurant.address ?? 'Noch offen'}
             />
-            <InfoRow
+            <ContactItem
+              icon="restaurant-outline"
               label="Küche"
               styles={styles}
               value={restaurant.cuisine ?? 'Restaurant'}
             />
-            <InfoRow
-              label="Telefon"
-              styles={styles}
-              value={restaurant.phone ?? 'Nicht verfügbar'}
-            />
-            <InfoRow
-              label="Website"
-              styles={styles}
-              value={restaurant.websiteUrl ? 'Öffnen' : 'Nicht verfügbar'}
-            />
+            {restaurant.phone ? (
+              <ContactItem
+                icon="call-outline"
+                label="Telefon"
+                styles={styles}
+                value={restaurant.phone}
+              />
+            ) : null}
+            {restaurant.websiteUrl ? (
+              <ContactItem
+                icon="globe-outline"
+                label="Website"
+                styles={styles}
+                value="Website öffnen"
+              />
+            ) : null}
           </View>
           <View style={styles.contactActions}>
             {restaurant.phone ? (
@@ -818,19 +915,26 @@ function MetricCard({
   );
 }
 
-function InfoRow({
+function ContactItem({
+  icon,
   label,
   styles,
   value,
 }: {
+  icon: keyof typeof Ionicons.glyphMap;
   label: string;
   styles: ReturnType<typeof makeStyles>;
   value: string;
 }) {
   return (
-    <View style={styles.infoRow}>
-      {label ? <Text style={styles.infoLabel}>{label}</Text> : null}
-      <Text style={styles.infoValue}>{value}</Text>
+    <View style={styles.contactItem}>
+      <View style={styles.contactIcon}>
+        <Ionicons name={icon} size={18} style={styles.contactIconGlyph} />
+      </View>
+      <View style={styles.contactCopy}>
+        <Text style={styles.contactLabel}>{label}</Text>
+        <Text style={styles.contactValue}>{value}</Text>
+      </View>
     </View>
   );
 }
@@ -1082,6 +1186,45 @@ function makeStyles(colors: ThemeColors) {
       flexWrap: 'wrap',
       gap: spacing.sm,
     },
+    contactCopy: {
+      flex: 1,
+      gap: spacing.xs,
+    },
+    contactGrid: {
+      gap: spacing.sm,
+    },
+    contactIcon: {
+      alignItems: 'center',
+      backgroundColor: colors.surfaceWarm,
+      borderRadius: radii.md,
+      height: 42,
+      justifyContent: 'center',
+      width: 42,
+    },
+    contactIconGlyph: {
+      color: colors.primary,
+    },
+    contactItem: {
+      alignItems: 'center',
+      backgroundColor: colors.surface,
+      borderColor: colors.border,
+      borderRadius: radii.lg,
+      borderWidth: 1,
+      flexDirection: 'row',
+      gap: spacing.md,
+      padding: spacing.md,
+    },
+    contactLabel: {
+      color: colors.textSecondary,
+      fontSize: typography.size.sm,
+      fontWeight: typography.weight.bold,
+    },
+    contactValue: {
+      color: colors.text,
+      fontSize: typography.size.md,
+      fontWeight: typography.weight.bold,
+      lineHeight: typography.lineHeight.md,
+    },
     content: {
       gap: spacing.xl,
       paddingBottom: 120,
@@ -1141,8 +1284,21 @@ function makeStyles(colors: ThemeColors) {
       alignItems: 'center',
       backgroundColor: colors.primary,
       flex: 1,
+      gap: spacing.xs,
       justifyContent: 'center',
       minHeight: 290,
+    },
+    heroFallbackCuisine: {
+      color: colors.white,
+      fontSize: typography.size.md,
+      fontWeight: typography.weight.bold,
+      opacity: 0.86,
+    },
+    heroFallbackInitial: {
+      color: colors.white,
+      fontSize: 58,
+      fontWeight: typography.weight.black,
+      lineHeight: 64,
     },
     heroImage: {
       ...StyleSheet.absoluteFillObject,
@@ -1153,6 +1309,58 @@ function makeStyles(colors: ThemeColors) {
       justifyContent: 'flex-end',
       minHeight: 290,
       padding: spacing.xl,
+    },
+    heroQualityPill: {
+      alignItems: 'center',
+      alignSelf: 'flex-start',
+      backgroundColor: colors.success,
+      borderRadius: radii.pill,
+      flexDirection: 'row',
+      gap: spacing.xs,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.xs,
+    },
+    heroQualityText: {
+      color: colors.white,
+      fontSize: typography.size.sm,
+      fontWeight: typography.weight.black,
+    },
+    hourRow: {
+      alignItems: 'center',
+      flexDirection: 'row',
+      gap: spacing.sm,
+    },
+    hoursCard: {
+      backgroundColor: colors.surface,
+      borderColor: colors.border,
+      borderRadius: radii.lg,
+      borderWidth: 1,
+      gap: spacing.md,
+      padding: spacing.lg,
+    },
+    hoursToggle: {
+      alignItems: 'center',
+      alignSelf: 'flex-start',
+      backgroundColor: colors.surfaceWarm,
+      borderColor: colors.border,
+      borderRadius: radii.pill,
+      borderWidth: 1,
+      flexDirection: 'row',
+      gap: spacing.xs,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+    },
+    hoursToggleText: {
+      color: colors.primary,
+      fontSize: typography.size.sm,
+      fontWeight: typography.weight.bold,
+    },
+    hourText: {
+      color: colors.text,
+      flex: 1,
+      fontSize: typography.size.md,
+      fontWeight: typography.weight.bold,
+      lineHeight: typography.lineHeight.md,
     },
     iconButton: {
       alignItems: 'center',
@@ -1400,6 +1608,27 @@ function makeStyles(colors: ThemeColors) {
       color: colors.text,
       fontSize: typography.size.xl,
       fontWeight: typography.weight.black,
+    },
+    signalChip: {
+      alignItems: 'center',
+      backgroundColor: colors.surface,
+      borderColor: colors.border,
+      borderRadius: radii.pill,
+      borderWidth: 1,
+      flexDirection: 'row',
+      gap: spacing.xs,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+    },
+    signalText: {
+      color: colors.text,
+      fontSize: typography.size.sm,
+      fontWeight: typography.weight.bold,
+    },
+    signalWrap: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: spacing.sm,
     },
     statusRow: {
       alignItems: 'center',

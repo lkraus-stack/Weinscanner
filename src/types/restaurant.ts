@@ -1,5 +1,29 @@
 export type RestaurantViewMode = 'list' | 'map';
 
+export type RestaurantQualityMode = 'off' | 'smart' | 'strict';
+
+export type RestaurantQualityLabel =
+  | 'Sehr gut'
+  | 'Solide'
+  | 'Top Qualität'
+  | 'Wenig Daten';
+
+export type WineProfileBadge =
+  | 'Sommelier'
+  | 'Vinothek'
+  | 'Weinbar'
+  | 'Weinkarte';
+
+export type WineProfile = {
+  badges: WineProfileBadge[];
+  hasSommelier: boolean;
+  hasWineCard: boolean;
+  isFullWineProfile: boolean;
+  isWineBar: boolean;
+  wineMentions: number;
+  wineScore: 0 | 1 | 2 | 3;
+};
+
 export type RestaurantAiOccasion =
   | 'quick_bite'
   | 'nice_evening'
@@ -39,6 +63,7 @@ export type RestaurantSearchFilters = {
   minRating?: number;
   openNow?: boolean;
   priceLevels?: string[];
+  qualityMode?: RestaurantQualityMode;
   radiusMeters?: number;
 };
 
@@ -58,11 +83,15 @@ export type RestaurantRecord = {
   priceLevel: string | null;
   provider: 'fallback' | 'google_places';
   providerPlaceId: string;
+  qualityLabel: RestaurantQualityLabel | null;
+  qualityScore: number | null;
+  qualitySignals: string[];
   rating: number | null;
   ratingCount: number | null;
   source: 'fallback' | 'google_places';
   types: string[];
   websiteUrl: string | null;
+  wineProfile?: WineProfile | null;
 };
 
 export type SavedRestaurantRecord = {

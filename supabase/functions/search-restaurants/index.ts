@@ -9,6 +9,10 @@ import {
   requirePost,
   requireUser,
 } from '../_shared/http.ts';
+import {
+  getRestaurantWineProfile,
+  type WineProfile,
+} from '../_shared/wine-profile.ts';
 
 type Coordinates = {
   lat: number;
@@ -25,6 +29,7 @@ type SearchRestaurantsRequest = {
     cuisineTypes?: string[];
     minRating?: number;
     openNow?: boolean;
+    qualityMode?: 'off' | 'smart' | 'strict';
     radiusMeters?: number;
   };
 };
@@ -45,9 +50,16 @@ type GooglePlace = {
     openNow?: boolean;
     weekdayDescriptions?: string[];
   };
+  reviews?: GoogleReview[];
+  servesWine?: boolean;
   types?: string[];
   userRatingCount?: number;
   websiteUri?: string;
+};
+
+type GoogleReview = {
+  originalText?: { text?: string };
+  text?: { text?: string };
 };
 
 type RestaurantRow = {
@@ -71,6 +83,12 @@ type RestaurantRow = {
   rating: number | null;
   rating_count: number | null;
   website_url: string | null;
+};
+
+type RestaurantQuality = {
+  qualityLabel: 'Sehr gut' | 'Solide' | 'Top Qualität' | 'Wenig Daten';
+  qualityScore: number;
+  qualitySignals: string[];
 };
 
 const SUPPORTED_CUISINE_TYPES = new Set([
@@ -135,9 +153,15 @@ function parseRequest(value: unknown): SearchRestaurantsRequest {
           typeof value.filters.openNow === 'boolean'
             ? value.filters.openNow
             : undefined,
+        qualityMode:
+          value.filters.qualityMode === 'off' ||
+          value.filters.qualityMode === 'smart' ||
+          value.filters.qualityMode === 'strict'
+            ? value.filters.qualityMode
+            : 'smart',
         radiusMeters: numberValue(value.filters.radiusMeters) ?? undefined,
       }
-    : undefined;
+    : { qualityMode: 'smart' as const };
 
   return {
     bounds: { northEast, southWest },
@@ -254,11 +278,137 @@ function formatCuisine(place: GooglePlace) {
   return null;
 }
 
-function restaurantRowToResponse(row: RestaurantRow, center: Coordinates) {
+function getQualityLabel(score: number, ratingCount: number | null) {
+  if ((ratingCount ?? 0) < 8) {
+    return 'Wenig Daten';
+  }
+
+  if (score >= 88) {
+    return 'Top Qualität';
+  }
+
+  if (score >= 76) {
+    return 'Sehr gut';
+  }
+
+  return 'Solide';
+}
+
+function getRestaurantQuality(
+  row: RestaurantRow,
+  center: Coordinates
+): RestaurantQuality {
   const location = {
     lat: Number(row.latitude),
     lng: Number(row.longitude),
   };
+  const rating = row.rating ?? 3.7;
+  const ratingCount = row.rating_count ?? 0;
+  const distanceMeters = getDistanceMeters(center, location);
+  const reviewScore = Math.min(Math.log10(Math.max(ratingCount, 1)) * 8, 22);
+  const photoScore = row.photo_refs && row.photo_refs.length > 0 ? 5 : 0;
+  const hoursScore = row.opening_hours?.weekdayDescriptions?.length ? 4 : 0;
+  const openScore = row.opening_hours?.openNow === true ? 3 : 0;
+  const typeScore =
+    row.place_types?.some((type) =>
+      [
+        'fine_dining_restaurant',
+        'italian_restaurant',
+        'mediterranean_restaurant',
+        'wine_bar',
+      ].includes(type)
+    ) ? 4 : 0;
+  const distancePenalty = Math.min(distanceMeters, 12000) / 1200;
+  const score = Math.max(
+    0,
+    Math.min(
+      100,
+      Math.round(rating * 13 + reviewScore + photoScore + hoursScore + openScore + typeScore - distancePenalty)
+    )
+  );
+  const signals = [
+    row.rating
+      ? `${row.rating.toFixed(1).replace('.', ',')} Google Sterne`
+      : null,
+    ratingCount >= 50
+      ? `${ratingCount} Bewertungen`
+      : ratingCount > 0
+        ? `${ratingCount} Bewertungen, noch wenig Daten`
+        : 'Wenig öffentliche Bewertungsdaten',
+    photoScore > 0 ? 'Restaurantfoto vorhanden' : null,
+    hoursScore > 0 ? 'Öffnungszeiten verfügbar' : null,
+    typeScore > 0 ? 'Klare Küchenrichtung' : null,
+  ].filter((signal): signal is string => Boolean(signal)).slice(0, 4);
+
+  return {
+    qualityLabel: getQualityLabel(score, row.rating_count),
+    qualityScore: score,
+    qualitySignals: signals,
+  };
+}
+
+function getSortScore(row: RestaurantRow, center: Coordinates) {
+  const quality = getRestaurantQuality(row, center);
+  const location = {
+    lat: Number(row.latitude),
+    lng: Number(row.longitude),
+  };
+  const distanceMeters = getDistanceMeters(center, location);
+
+  return quality.qualityScore - Math.min(distanceMeters, 10000) / 700;
+}
+
+function getReviewTexts(place: GooglePlace) {
+  return (place.reviews ?? [])
+    .slice(0, 5)
+    .map((review) => review.text?.text ?? review.originalText?.text ?? null)
+    .filter(
+      (text): text is string =>
+        typeof text === 'string' && Boolean(text.trim())
+    );
+}
+
+function getGooglePlaceWineProfile(place: GooglePlace) {
+  return getRestaurantWineProfile({
+    cuisine: formatCuisine(place),
+    name: place.displayName?.text ?? '',
+    reviewTexts: getReviewTexts(place),
+    servesWine: place.servesWine,
+    types: place.types ?? [],
+  });
+}
+
+function getRestaurantRowWineProfile(row: RestaurantRow) {
+  return getRestaurantWineProfile({
+    cuisine: row.cuisine,
+    name: row.name,
+    types: row.place_types ?? [],
+  });
+}
+
+function getSourcePayload(place: GooglePlace) {
+  return {
+    has_reviews: Array.isArray(place.reviews) && place.reviews.length > 0,
+    review_count_used: Array.isArray(place.reviews)
+      ? Math.min(place.reviews.length, 5)
+      : 0,
+    serves_wine: place.servesWine ?? null,
+    source: 'google_places',
+  };
+}
+
+function restaurantRowToResponse(
+  row: RestaurantRow,
+  center: Coordinates,
+  wineProfile?: WineProfile | null
+) {
+  const location = {
+    lat: Number(row.latitude),
+    lng: Number(row.longitude),
+  };
+  const quality = getRestaurantQuality(row, center);
+  const resolvedWineProfile =
+    wineProfile === undefined ? getRestaurantRowWineProfile(row) : wineProfile;
 
   return {
     address: row.formatted_address,
@@ -282,11 +432,15 @@ function restaurantRowToResponse(row: RestaurantRow, center: Coordinates) {
     priceLevel: row.price_level,
     provider: row.provider,
     providerPlaceId: row.provider_place_id,
+    qualityLabel: quality.qualityLabel,
+    qualityScore: quality.qualityScore,
+    qualitySignals: quality.qualitySignals,
     rating: row.rating,
     ratingCount: row.rating_count,
     source: row.provider,
     types: row.place_types ?? [],
     websiteUrl: row.website_url,
+    wineProfile: resolvedWineProfile,
   };
 }
 
@@ -333,7 +487,7 @@ function normalizePlace(place: GooglePlace) {
       typeof place.userRatingCount === 'number'
         ? place.userRatingCount
         : null,
-    source_payload: place,
+    source_payload: getSourcePayload(place),
     website_url: place.websiteUri ?? null,
   };
 }
@@ -385,15 +539,34 @@ serve(async (req) => {
           ])
         );
 
-        return jsonResponse({
-          data: cachedSearch.restaurant_ids
+        const cachedRows = cachedSearch.restaurant_ids
             .map((id: string) => byId.get(id))
             .filter((restaurant): restaurant is RestaurantRow =>
               Boolean(restaurant)
             )
-            .map((restaurant) =>
-              restaurantRowToResponse(restaurant, payload.center)
-            ),
+            .filter((restaurant) =>
+              payload.filters?.qualityMode === 'strict'
+                ? getRestaurantQuality(restaurant, payload.center).qualityScore >= 78
+                : true
+            )
+            .sort((first, second) =>
+              payload.filters?.qualityMode === 'off'
+                ? getDistanceMeters(payload.center, {
+                    lat: Number(first.latitude),
+                    lng: Number(first.longitude),
+                  }) -
+                  getDistanceMeters(payload.center, {
+                    lat: Number(second.latitude),
+                    lng: Number(second.longitude),
+                  })
+                : getSortScore(second, payload.center) -
+                  getSortScore(first, payload.center)
+            );
+
+        return jsonResponse({
+          data: cachedRows.map((restaurant) =>
+            restaurantRowToResponse(restaurant, payload.center)
+          ),
           source: 'google_places',
         });
       }
@@ -425,13 +598,14 @@ serve(async (req) => {
             },
           },
           maxResultCount: 20,
-          rankPreference: 'DISTANCE',
+          rankPreference:
+            payload.filters?.qualityMode === 'off' ? 'DISTANCE' : 'POPULARITY',
         }),
         headers: {
           'Content-Type': 'application/json',
           'X-Goog-Api-Key': googlePlacesKey,
           'X-Goog-FieldMask':
-            'places.id,places.displayName,places.formattedAddress,places.location,places.rating,places.userRatingCount,places.priceLevel,places.types,places.primaryType,places.regularOpeningHours,places.googleMapsUri,places.websiteUri,places.photos,places.internationalPhoneNumber,places.nationalPhoneNumber',
+            'places.id,places.displayName,places.formattedAddress,places.location,places.rating,places.userRatingCount,places.priceLevel,places.types,places.primaryType,places.regularOpeningHours,places.googleMapsUri,places.websiteUri,places.photos,places.internationalPhoneNumber,places.nationalPhoneNumber,places.reviews,places.servesWine',
         },
         method: 'POST',
       }
@@ -442,7 +616,16 @@ serve(async (req) => {
     }
 
     const body = await response.json();
-    const places = Array.isArray(body.places) ? body.places : [];
+    const places = Array.isArray(body.places)
+      ? (body.places as GooglePlace[])
+      : [];
+    const wineProfileByPlaceId = new Map(
+      places
+        .filter((place): place is GooglePlace & { id: string } =>
+          typeof place.id === 'string'
+        )
+        .map((place) => [place.id, getGooglePlaceWineProfile(place)])
+    );
     const restaurantRows = places
       .map(normalizePlace)
       .filter((place): place is NonNullable<ReturnType<typeof normalizePlace>> =>
@@ -488,6 +671,24 @@ serve(async (req) => {
         payload.filters?.openNow
           ? restaurant.opening_hours?.openNow !== false
           : true
+      )
+      .filter((restaurant) =>
+        payload.filters?.qualityMode === 'strict'
+          ? getRestaurantQuality(restaurant, payload.center).qualityScore >= 78
+          : true
+      )
+      .sort((first, second) =>
+        payload.filters?.qualityMode === 'off'
+          ? getDistanceMeters(payload.center, {
+              lat: Number(first.latitude),
+              lng: Number(first.longitude),
+            }) -
+            getDistanceMeters(payload.center, {
+              lat: Number(second.latitude),
+              lng: Number(second.longitude),
+            })
+          : getSortScore(second, payload.center) -
+            getSortScore(first, payload.center)
       );
 
     await supabase.from('restaurant_search_cache').upsert(
@@ -506,7 +707,11 @@ serve(async (req) => {
 
     return jsonResponse({
       data: restaurants.map((restaurant) =>
-        restaurantRowToResponse(restaurant, payload.center)
+        restaurantRowToResponse(
+          restaurant,
+          payload.center,
+          wineProfileByPlaceId.get(restaurant.provider_place_id)
+        )
       ),
       source: 'google_places',
     });

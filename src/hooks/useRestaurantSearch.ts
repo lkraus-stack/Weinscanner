@@ -37,6 +37,7 @@ export function useRestaurantSearch({
       filters?.cuisine ?? null,
       filters?.cuisineTypes?.join(',') ?? null,
       filters?.priceLevels?.join(',') ?? null,
+      filters?.qualityMode ?? null,
       filters?.radiusMeters ?? null,
     ],
     staleTime: 5 * 60 * 1000,

@@ -20,6 +20,8 @@ import type {
   RestaurantVisitListItem,
   RestaurantVisitRecord,
   SavedRestaurantRecord,
+  WineProfile,
+  WineProfileBadge,
 } from '@/types/restaurant';
 
 export const MUNICH_CENTER: Coordinates = {
@@ -51,11 +53,23 @@ const FALLBACK_RESTAURANTS: RestaurantRecord[] = [
     priceLevel: 'Mittel',
     provider: 'fallback',
     providerPlaceId: 'fallback-viktualienmarkt',
+    qualityLabel: 'Sehr gut',
+    qualityScore: 86,
+    qualitySignals: ['Viele Bewertungen', 'Weinbar-Signal', 'Gute Lage'],
     rating: 4.6,
     ratingCount: 312,
     source: 'fallback',
     types: ['restaurant', 'wine_bar'],
     websiteUrl: null,
+    wineProfile: {
+      badges: ['Weinbar'],
+      hasSommelier: false,
+      hasWineCard: false,
+      isFullWineProfile: true,
+      isWineBar: true,
+      wineMentions: 1,
+      wineScore: 3,
+    },
   },
   {
     address: 'Prannerstraße 11, 80333 München',
@@ -73,11 +87,23 @@ const FALLBACK_RESTAURANTS: RestaurantRecord[] = [
     priceLevel: 'Gehoben',
     provider: 'fallback',
     providerPlaceId: 'fallback-prannerstrasse',
+    qualityLabel: 'Top Qualität',
+    qualityScore: 91,
+    qualitySignals: ['Fine Dining', 'Sehr gute Bewertung', 'Weinfokus'],
     rating: 4.7,
     ratingCount: 188,
     source: 'fallback',
     types: ['restaurant', 'fine_dining_restaurant'],
     websiteUrl: null,
+    wineProfile: {
+      badges: [],
+      hasSommelier: false,
+      hasWineCard: false,
+      isFullWineProfile: false,
+      isWineBar: false,
+      wineMentions: 1,
+      wineScore: 1,
+    },
   },
   {
     address: 'Schellingstraße 48, 80799 München',
@@ -95,11 +121,23 @@ const FALLBACK_RESTAURANTS: RestaurantRecord[] = [
     priceLevel: 'Mittel',
     provider: 'fallback',
     providerPlaceId: 'fallback-schellingstrasse',
+    qualityLabel: 'Sehr gut',
+    qualityScore: 82,
+    qualitySignals: ['Italienische Küche', 'Solide Datenbasis', 'Weinfokus'],
     rating: 4.4,
     ratingCount: 96,
     source: 'fallback',
     types: ['restaurant', 'italian_restaurant'],
     websiteUrl: null,
+    wineProfile: {
+      badges: [],
+      hasSommelier: false,
+      hasWineCard: false,
+      isFullWineProfile: false,
+      isWineBar: false,
+      wineMentions: 2,
+      wineScore: 1,
+    },
   },
   {
     address: 'Gärtnerplatz 3, 80469 München',
@@ -117,11 +155,23 @@ const FALLBACK_RESTAURANTS: RestaurantRecord[] = [
     priceLevel: 'Mittel',
     provider: 'fallback',
     providerPlaceId: 'fallback-gaertnerplatz',
+    qualityLabel: 'Sehr gut',
+    qualityScore: 84,
+    qualitySignals: ['Mediterrane Küche', 'Viele Bewertungen', 'Gute Lage'],
     rating: 4.5,
     ratingCount: 244,
     source: 'fallback',
     types: ['restaurant', 'mediterranean_restaurant'],
     websiteUrl: null,
+    wineProfile: {
+      badges: [],
+      hasSommelier: false,
+      hasWineCard: false,
+      isFullWineProfile: false,
+      isWineBar: false,
+      wineMentions: 1,
+      wineScore: 1,
+    },
   },
 ];
 
@@ -262,6 +312,46 @@ function parseStringArray(value: unknown): string[] {
     : [];
 }
 
+function parseWineProfileBadge(value: unknown): WineProfileBadge | null {
+  return value === 'Sommelier' ||
+    value === 'Vinothek' ||
+    value === 'Weinbar' ||
+    value === 'Weinkarte'
+    ? value
+    : null;
+}
+
+function parseWineScore(value: unknown): WineProfile['wineScore'] {
+  return value === 1 || value === 2 || value === 3 ? value : 0;
+}
+
+function normalizeWineProfile(value: unknown): WineProfile | null {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return null;
+  }
+
+  const record = value as Record<string, unknown>;
+  const wineScore = parseWineScore(record.wineScore);
+
+  return {
+    badges: Array.isArray(record.badges)
+      ? record.badges
+          .map(parseWineProfileBadge)
+          .filter((badge): badge is WineProfileBadge => Boolean(badge))
+      : [],
+    hasSommelier: record.hasSommelier === true,
+    hasWineCard: record.hasWineCard === true,
+    isFullWineProfile: record.isFullWineProfile === true,
+    isWineBar: record.isWineBar === true,
+    wineMentions:
+      typeof record.wineMentions === 'number' &&
+      Number.isFinite(record.wineMentions)
+        ? Math.max(0, Math.round(record.wineMentions))
+        : 0,
+    wineScore,
+  };
+}
+
 function getOpeningHours(value: unknown) {
   if (
     typeof value !== 'object' ||
@@ -337,11 +427,15 @@ function restaurantRowToRecord(
     priceLevel: row.price_level,
     provider: row.provider === 'google_places' ? 'google_places' : 'fallback',
     providerPlaceId: row.provider_place_id,
+    qualityLabel: null,
+    qualityScore: null,
+    qualitySignals: [],
     rating: row.rating,
     ratingCount: row.rating_count,
     source: row.provider === 'google_places' ? 'google_places' : 'fallback',
     types: row.place_types ?? [],
     websiteUrl: row.website_url,
+    wineProfile: null,
   };
 }
 
@@ -389,6 +483,16 @@ function normalizeRestaurant(value: unknown): RestaurantRecord | null {
       typeof record.providerPlaceId === 'string'
         ? record.providerPlaceId
         : record.id,
+    qualityLabel:
+      record.qualityLabel === 'Top Qualität' ||
+      record.qualityLabel === 'Sehr gut' ||
+      record.qualityLabel === 'Solide' ||
+      record.qualityLabel === 'Wenig Daten'
+        ? record.qualityLabel
+        : null,
+    qualityScore:
+      typeof record.qualityScore === 'number' ? record.qualityScore : null,
+    qualitySignals: parseStringArray(record.qualitySignals),
     rating: typeof record.rating === 'number' ? record.rating : null,
     ratingCount:
       typeof record.ratingCount === 'number' ? record.ratingCount : null,
@@ -396,6 +500,7 @@ function normalizeRestaurant(value: unknown): RestaurantRecord | null {
     types: parseStringArray(record.types),
     websiteUrl:
       typeof record.websiteUrl === 'string' ? record.websiteUrl : null,
+    wineProfile: normalizeWineProfile(record.wineProfile),
   };
 }
 
@@ -888,14 +993,18 @@ export async function searchRestaurants(
       .filter((restaurant): restaurant is RestaurantRecord =>
         Boolean(restaurant)
       );
+    const source =
+      data.source === 'google_places' ? 'google_places' : 'fallback';
 
     if (normalizedRestaurants.length === 0) {
-      return { data: fallback, source: 'fallback' };
+      return source === 'google_places'
+        ? { data: [], source }
+        : { data: fallback, source: 'fallback' };
     }
 
     return {
       data: normalizedRestaurants,
-      source: data.source === 'google_places' ? 'google_places' : 'fallback',
+      source,
     };
   } catch {
     return { data: fallback, source: 'fallback' };

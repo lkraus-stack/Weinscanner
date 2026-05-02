@@ -19,6 +19,7 @@ export type RestaurantDiscoveryPreferences = {
   min_rating: number | null;
   open_now: boolean;
   preferred_view: 'list' | 'map';
+  quality_mode: 'off' | 'smart' | 'strict';
   radius_meters: number;
 };
 
@@ -51,6 +52,7 @@ export const DEFAULT_USER_PREFERENCES: UserPreferences = {
     min_rating: null,
     open_now: false,
     preferred_view: 'map',
+    quality_mode: 'smart',
     radius_meters: 5000,
   },
   theme: 'auto',
@@ -110,9 +112,19 @@ function normalizeMinRating(value: unknown) {
 }
 
 function normalizeRadiusMeters(value: unknown) {
-  return value === 1000 || value === 5000 || value === 10000 || value === 25000
+  return value === 1000 ||
+    value === 3000 ||
+    value === 5000 ||
+    value === 10000 ||
+    value === 25000
     ? value
     : DEFAULT_USER_PREFERENCES.restaurant_discovery.radius_meters;
+}
+
+function normalizeQualityMode(value: unknown) {
+  return value === 'off' || value === 'smart' || value === 'strict'
+    ? value
+    : DEFAULT_USER_PREFERENCES.restaurant_discovery.quality_mode;
 }
 
 function normalizeRestaurantDiscoveryPreferences(
@@ -138,6 +150,7 @@ function normalizeRestaurantDiscoveryPreferences(
         ? value.open_now
         : DEFAULT_USER_PREFERENCES.restaurant_discovery.open_now,
     preferred_view: value.preferred_view === 'list' ? 'list' : 'map',
+    quality_mode: normalizeQualityMode(value.quality_mode),
     radius_meters: normalizeRadiusMeters(value.radius_meters),
   };
 }
