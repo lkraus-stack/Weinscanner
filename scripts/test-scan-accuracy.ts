@@ -10,6 +10,7 @@ import { uploadBuffer } from '../src/lib/storage';
 
 type TestEnv = {
   SCAN_ACCURACY_IMAGE_PATH?: string;
+  SCAN_ACCURACY_KURTATSCH_IMAGE_PATH?: string;
   SCAN_ACCURACY_TEST_EMAIL?: string;
   SCAN_ACCURACY_TEST_PASSWORD?: string;
   SUPABASE_ANON_KEY: string;
@@ -19,11 +20,22 @@ type TestEnv = {
 
 type ScanWineResult = {
   extraction?: {
+    data_sources?: string[];
     grape_variety?: string | null;
+    grape_varieties?: string[];
+    vinification?: string | null;
     vintage_year?: number | null;
+    verification?: {
+      field_status?: Record<string, string>;
+      safe_to_persist_enrichment?: boolean;
+      source_status?: string;
+      status?: string;
+      verified_data_sources?: string[];
+    };
   };
   minimal?: {
     grape_variety?: string | null;
+    grape_varieties?: string[];
     producer?: string;
     vintage_year?: number | null;
     wine_name?: string;
@@ -42,6 +54,8 @@ const DEFAULT_IMAGE_PATH =
 const DEFAULT_TEST_EMAIL = 'scan-accuracy-test@wine-scanner.dev';
 const DEFAULT_TEST_PASSWORD = 'ChangeMeScanAccuracyTest123!';
 const BUCKET_NAME = 'wine-labels';
+const KURTATSCH_AMOS_SOURCE_URL =
+  'https://www.kellerei-kurtatsch.it/en/wines/amos-5/';
 
 function parseEnvFile(contents: string): Partial<TestEnv> {
   return contents
@@ -208,6 +222,88 @@ function assertExpectedWineOrNeedsMoreInfo(result: ScanWineResult) {
   }
 }
 
+function assertKurtatschIsNotOverconfident(result: ScanWineResult) {
+  if (result.source === 'needs_more_info' || result.source === 'low_confidence') {
+    return;
+  }
+
+  const grapes = [
+    result.minimal?.grape_variety ?? '',
+    ...(result.minimal?.grape_varieties ?? []),
+    result.wine?.grape_variety ?? '',
+    result.extraction?.grape_variety ?? '',
+    ...(result.extraction?.grape_varieties ?? []),
+  ]
+    .join(' ')
+    .toLowerCase();
+  const verification = result.extraction?.verification;
+  const safeEnrichment = verification?.safe_to_persist_enrichment === true;
+  const dataSources = [
+    ...(result.extraction?.data_sources ?? []),
+    ...(verification?.verified_data_sources ?? []),
+  ];
+  const hasIncompleteThreeGrapeClaim =
+    grapes.includes('weißburgunder') &&
+    grapes.includes('chardonnay') &&
+    grapes.includes('sauvignon') &&
+    !grapes.includes('riesling') &&
+    !grapes.includes('pinot');
+
+  if (safeEnrichment && hasIncompleteThreeGrapeClaim) {
+    throw new Error(
+      'Regression: Kurtatsch-Rebsorten wurden unvollständig als sicher freigegeben.'
+    );
+  }
+
+  if (
+    verification?.field_status?.vinification === 'verified' &&
+    result.extraction?.verification?.safe_to_persist_enrichment &&
+    !result.extraction?.verification?.status
+  ) {
+    throw new Error('Regression: Vinifikation wurde ohne Prüfstatus freigegeben.');
+  }
+
+  if (verification?.source_status !== 'found') {
+    throw new Error('Regression: Kurtatsch-Quelle wurde nicht gefunden.');
+  }
+
+  if (
+    !dataSources.some((source) =>
+      source.startsWith(KURTATSCH_AMOS_SOURCE_URL)
+    )
+  ) {
+    throw new Error('Regression: Kurtatsch-Herstellerquelle fehlt.');
+  }
+
+  const expectedGrapes = [
+    ['pinot bianco', 'weißburgunder', 'weissburgunder'],
+    ['chardonnay'],
+    ['pinot grigio', 'grauburgunder'],
+    ['riesling'],
+    ['sauvignon'],
+  ];
+
+  for (const alternatives of expectedGrapes) {
+    if (!alternatives.some((alternative) => grapes.includes(alternative))) {
+      throw new Error(
+        `Regression: Kurtatsch-Rebsorte fehlt: ${alternatives.join(' / ')}`
+      );
+    }
+  }
+
+  const vinification = result.extraction?.vinification?.toLowerCase() ?? '';
+
+  if (
+    !vinification.includes('large oak') &&
+    !vinification.includes('eichen') &&
+    !vinification.includes('wooden')
+  ) {
+    throw new Error(
+      'Regression: Kurtatsch-Vinifikation enthält keine große Eichenfasslagerung.'
+    );
+  }
+}
+
 async function run() {
   const env = loadEnv();
   const adminClient = createClient(
@@ -276,6 +372,53 @@ async function run() {
     assertNoWrongWine(result);
     assertExpectedWineOrNeedsMoreInfo(result);
     console.log(JSON.stringify(result, null, 2));
+
+    if (env.SCAN_ACCURACY_KURTATSCH_IMAGE_PATH) {
+      const kurtatschImageBuffer = readFileSync(
+        resolve(env.SCAN_ACCURACY_KURTATSCH_IMAGE_PATH)
+      );
+      const kurtatschUpload = await uploadBuffer(
+        testUser.id,
+        toArrayBuffer(kurtatschImageBuffer),
+        `scan-accuracy-kurtatsch-${Date.now()}.jpg`,
+        anonClient
+      );
+
+      try {
+        const kurtatschResponse = await fetch(
+          `${env.SUPABASE_URL}/functions/v1/scan-wine`,
+          {
+            body: JSON.stringify({
+              imageUrl: kurtatschUpload.signedUrl,
+            }),
+            headers: {
+              Authorization: `Bearer ${signInData.session.access_token}`,
+              apikey: env.SUPABASE_ANON_KEY,
+              'Content-Type': 'application/json',
+            },
+            method: 'POST',
+          }
+        );
+        const kurtatschResponseText = await kurtatschResponse.text();
+
+        if (!kurtatschResponse.ok) {
+          throw new Error(
+            `scan-wine Kurtatsch returned ${kurtatschResponse.status} ${kurtatschResponse.statusText}: ${kurtatschResponseText}`
+          );
+        }
+
+        const kurtatschResult = JSON.parse(
+          kurtatschResponseText
+        ) as ScanWineResult;
+
+        assertKurtatschIsNotOverconfident(kurtatschResult);
+      } finally {
+        await adminClient.storage
+          .from(BUCKET_NAME)
+          .remove([kurtatschUpload.storagePath]);
+      }
+    }
+
     console.log('PASS');
   } finally {
     await adminClient.storage.from(BUCKET_NAME).remove([upload.storagePath]);

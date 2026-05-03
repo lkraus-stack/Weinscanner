@@ -16,8 +16,20 @@ import {
 import {
   type MinimalWineExtraction,
   type WineExtraction,
+  isRecord,
   validateExtractWineRequest,
 } from '../_shared/wine-schema.ts';
+import {
+  buildBasicVerification,
+  buildCacheVerification,
+  mergeOfficialSource,
+  sanitizeExtractionForVerification,
+  shouldRunAdjudicator,
+  shouldRunOfficialSourceCheck,
+  verifyOfficialWineSource,
+  verifyWineExtraction,
+  type WineVerification,
+} from '../_shared/wine-verification.ts';
 
 const LOW_CONFIDENCE_THRESHOLD = 0.4;
 const PRODUCT_CONFIDENCE_THRESHOLD = 0.55;
@@ -66,6 +78,7 @@ function buildLabelEvidenceText(minimal: MinimalWineExtraction) {
   return JSON.stringify(
     {
       grape_variety: minimal.grape_variety,
+      grape_varieties: minimal.grape_varieties,
       needs_more_info_reason: minimal.needs_more_info_reason,
       photo_quality: minimal.photo_quality,
       producer: minimal.producer,
@@ -116,10 +129,177 @@ function preferLabelEvidence(
       ),
     },
     grape_variety: minimal.grape_variety ?? extraction.grape_variety,
+    grape_varieties:
+      minimal.grape_varieties.length > 0
+        ? minimal.grape_varieties
+        : extraction.grape_varieties,
     producer: minimal.producer || extraction.producer,
     vintage_year: minimal.vintage_year ?? extraction.vintage_year,
     wine_name: minimal.wine_name || extraction.wine_name,
   };
+}
+
+async function verifyAndSanitizeExtraction({
+  extraction,
+  imageUrl,
+  minimal,
+  secondaryImageUrl,
+  signal,
+}: {
+  extraction: WineExtraction;
+  imageUrl: string;
+  minimal: MinimalWineExtraction;
+  secondaryImageUrl?: string;
+  signal: AbortSignal;
+}) {
+  let verification = await verifyWineExtraction({
+    extraction,
+    minimal,
+    signal,
+  });
+
+  if (shouldRunAdjudicator(minimal, extraction, verification)) {
+    const adjudication = await extractWineMinimal(
+      imageUrl,
+      signal,
+      secondaryImageUrl,
+      'adjudicator'
+    );
+
+    verification = await verifyWineExtraction({
+      adjudication,
+      extraction,
+      minimal,
+      signal,
+    });
+  }
+
+  let verifiedExtraction = extraction;
+
+  if (shouldRunOfficialSourceCheck(extraction, verification, minimal)) {
+    try {
+      const officialSource = await verifyOfficialWineSource(extraction, signal);
+
+      if (officialSource?.status === 'found') {
+        verifiedExtraction = mergeOfficialSource(extraction, officialSource);
+        const sourceBackedStatus =
+          officialSource.grape_varieties.length > 0 &&
+          (officialSource.description_short ||
+            officialSource.description_long ||
+            officialSource.vinification)
+            ? 'verified'
+            : 'partial';
+        verification = {
+          ...verification,
+          field_status: {
+            aromas: officialSource.aromas.length > 0
+              ? 'verified'
+              : verification.field_status.aromas,
+            description:
+              officialSource.description_short || officialSource.description_long
+                ? 'verified'
+                : verification.field_status.description,
+            drinking_window:
+              officialSource.drinking_window_start ||
+              officialSource.drinking_window_end
+                ? 'verified'
+                : verification.field_status.drinking_window,
+            food_pairing: officialSource.food_pairing
+              ? 'verified'
+              : verification.field_status.food_pairing,
+            grapes: officialSource.grape_varieties.length > 0
+              ? 'verified'
+              : verification.field_status.grapes,
+            vinification: officialSource.vinification
+              ? 'verified'
+              : verification.field_status.vinification,
+          },
+          model_notes: [
+            ...verification.model_notes,
+            'Offizielle Herstellerquelle wurde fuer Enrichment genutzt.',
+            ...officialSource.evidence_snippets.slice(0, 3),
+          ],
+          safe_to_persist_enrichment: true,
+          source_checked: true,
+          source_status: 'found',
+          status:
+            verification.status === 'conflict' ? 'partial' : sourceBackedStatus,
+          verified_data_sources: Array.from(
+            new Set([
+              ...verification.verified_data_sources,
+              ...officialSource.data_sources,
+            ])
+          ),
+        };
+      } else {
+        verification = {
+          ...verification,
+          model_notes: [
+            ...verification.model_notes,
+            officialSource?.status === 'timeout'
+              ? 'Herstellerquelle konnte nicht schnell genug geprueft werden.'
+              : 'Keine passende Herstellerquelle gefunden.',
+          ],
+          source_checked: true,
+          source_status:
+            officialSource?.status === 'timeout' ? 'timeout' : 'not_found',
+        };
+      }
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'Quellenpruefung fehlgeschlagen.';
+
+      verification = {
+        ...verification,
+        model_notes: [...verification.model_notes, message],
+        source_checked: true,
+        source_status: 'error',
+      };
+    }
+  }
+
+  return {
+    extraction: sanitizeExtractionForVerification(
+      verifiedExtraction,
+      verification
+    ),
+    verification,
+  };
+}
+
+function verificationForNeedsMoreInfo(reason: string): WineVerification {
+  return buildBasicVerification('needs_more_info', reason);
+}
+
+function buildFallbackMinimal(reason: string): MinimalWineExtraction {
+  return {
+    confidence: {
+      overall: 0,
+      producer: 0,
+      vintage_year: 0,
+      wine_name: 0,
+    },
+    estimated_vintage_year: null,
+    estimated_vintage_year_reason: null,
+    grape_varieties: [],
+    grape_variety: null,
+    needs_more_info_reason: reason,
+    photo_quality: 'poor',
+    producer: '',
+    visible_text_lines: [],
+    vintage_year: null,
+    wine_name: '',
+  };
+}
+
+function getAnalysisFailureReason(error: unknown) {
+  if (error instanceof DOMException && error.name === 'AbortError') {
+    return 'Die KI-Analyse hat zu lange gedauert.';
+  }
+
+  return 'Die KI-Analyse konnte das Foto nicht sicher lesen.';
 }
 
 async function persistFreshWine(
@@ -185,11 +365,24 @@ serve(async (req) => {
     const timeout = setTimeout(() => abortController.abort(), PIPELINE_TIMEOUT_MS);
 
     try {
-      const minimal = await extractWineMinimal(
-        imageUrl,
-        abortController.signal,
-        secondaryImageUrl
-      );
+      let minimal: MinimalWineExtraction;
+
+      try {
+        minimal = await extractWineMinimal(
+          imageUrl,
+          abortController.signal,
+          secondaryImageUrl
+        );
+      } catch (error) {
+        const reason = getAnalysisFailureReason(error);
+
+        console.error('Minimalanalyse fehlgeschlagen:', reason);
+
+        return jsonResponse({
+          minimal: buildFallbackMinimal(reason),
+          source: 'low_confidence',
+        });
+      }
 
       if (minimal.confidence.overall < LOW_CONFIDENCE_THRESHOLD) {
         return jsonResponse({
@@ -205,6 +398,7 @@ serve(async (req) => {
           minimal,
           reason: infoReason,
           source: 'needs_more_info',
+          verification: verificationForNeedsMoreInfo(infoReason),
         });
       }
 
@@ -217,10 +411,19 @@ serve(async (req) => {
       });
 
       if (searchResult.found) {
+        const cacheVerification = buildCacheVerification(
+          minimal,
+          isRecord(searchResult.wine) ? searchResult.wine : {},
+          isRecord(searchResult.matchedVintage)
+            ? searchResult.matchedVintage
+            : null
+        );
+
         return jsonResponse({
           matchedVintage: searchResult.matchedVintage,
           minimal,
           source: 'cache',
+          verification: cacheVerification,
           vintages: searchResult.vintages,
           wine: searchResult.wine,
         });
@@ -235,30 +438,50 @@ serve(async (req) => {
         abortController.signal
       );
       const labelAlignedExtraction = preferLabelEvidence(extraction, minimal);
+      const verifiedResult = await verifyAndSanitizeExtraction({
+        extraction: labelAlignedExtraction,
+        imageUrl,
+        minimal,
+        secondaryImageUrl,
+        signal: abortController.signal,
+      });
       const secondSearchResult = await searchWineInDb(supabase, {
-        grapeVariety: labelAlignedExtraction.grape_variety,
-        producer: labelAlignedExtraction.producer,
-        vintageYear: labelAlignedExtraction.vintage_year,
-        wineName: labelAlignedExtraction.wine_name,
+        grapeVariety: verifiedResult.extraction.grape_variety,
+        producer: verifiedResult.extraction.producer,
+        vintageYear: verifiedResult.extraction.vintage_year,
+        wineName: verifiedResult.extraction.wine_name,
       });
 
       if (secondSearchResult.found) {
+        const cacheVerification = buildCacheVerification(
+          minimal,
+          isRecord(secondSearchResult.wine) ? secondSearchResult.wine : {},
+          isRecord(secondSearchResult.matchedVintage)
+            ? secondSearchResult.matchedVintage
+            : null
+        );
+
         return jsonResponse({
           matchedVintage: secondSearchResult.matchedVintage,
           minimal,
           source: 'cache',
+          verification: cacheVerification,
           vintages: secondSearchResult.vintages,
           wine: secondSearchResult.wine,
         });
       }
 
-      const persisted = await persistFreshWine(supabase, labelAlignedExtraction);
+      const persisted = await persistFreshWine(
+        supabase,
+        verifiedResult.extraction
+      );
 
       return jsonResponse({
-        extraction: labelAlignedExtraction,
+        extraction: verifiedResult.extraction,
         matchedVintage: persisted.matchedVintage,
         minimal,
         source: 'fresh',
+        verification: verifiedResult.verification,
         vintage: persisted.vintage,
         vintages: persisted.vintages,
         wine: persisted.wine,

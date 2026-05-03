@@ -22,8 +22,17 @@ export function usePreferences() {
     : DEFAULT_USER_PREFERENCES;
   const updatePreferenceMutation = useMutation({
     mutationFn: async ({ key, value }: UpdatePreferenceVariables) => {
+      const currentProfile = profileQuery.data?.id
+        ? queryClient.getQueryData<ProfileWithAvatar>([
+            'profile',
+            profileQuery.data.id,
+          ])
+        : undefined;
+      const basePreferences = currentProfile
+        ? normalizePreferences(currentProfile.preferences)
+        : preferences;
       const nextPreferences = {
-        ...preferences,
+        ...basePreferences,
         [key]: value,
       };
 

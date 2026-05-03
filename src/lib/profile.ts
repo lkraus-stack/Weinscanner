@@ -23,7 +23,24 @@ export type RestaurantDiscoveryPreferences = {
   radius_meters: number;
 };
 
+export const AI_CONSENT_VERSION = '2026-05-ai-v1';
+export const AGE_GATE_VERSION = '2026-05-age-v1';
+
+export type AiConsentPreferences = {
+  accepted_at: string | null;
+  provider_scope: 'vantero_google';
+  version: typeof AI_CONSENT_VERSION;
+};
+
+export type AgeGatePreferences = {
+  confirmed_at: string | null;
+  minimum_age: 16 | 18 | null;
+  version: typeof AGE_GATE_VERSION;
+};
+
 export type UserPreferences = {
+  age_gate: AgeGatePreferences;
+  ai_consent: AiConsentPreferences;
   hide_empty_inventory: boolean;
   language: 'de';
   notifications_enabled: boolean;
@@ -42,6 +59,16 @@ type ProfileUpdates = {
 };
 
 export const DEFAULT_USER_PREFERENCES: UserPreferences = {
+  age_gate: {
+    confirmed_at: null,
+    minimum_age: null,
+    version: AGE_GATE_VERSION,
+  },
+  ai_consent: {
+    accepted_at: null,
+    provider_scope: 'vantero_google',
+    version: AI_CONSENT_VERSION,
+  },
   hide_empty_inventory: false,
   language: 'de',
   notifications_enabled: false,
@@ -84,6 +111,47 @@ function normalizeTheme(value: unknown): ThemePreference {
   }
 
   return DEFAULT_USER_PREFERENCES.theme;
+}
+
+function normalizeAiConsentPreferences(value: unknown): AiConsentPreferences {
+  if (!isRecord(value)) {
+    return DEFAULT_USER_PREFERENCES.ai_consent;
+  }
+
+  if (value.version !== AI_CONSENT_VERSION) {
+    return DEFAULT_USER_PREFERENCES.ai_consent;
+  }
+
+  return {
+    accepted_at:
+      typeof value.accepted_at === 'string' && value.accepted_at.trim()
+        ? value.accepted_at.trim()
+        : DEFAULT_USER_PREFERENCES.ai_consent.accepted_at,
+    provider_scope: 'vantero_google',
+    version: AI_CONSENT_VERSION,
+  };
+}
+
+function normalizeAgeGatePreferences(value: unknown): AgeGatePreferences {
+  if (!isRecord(value)) {
+    return DEFAULT_USER_PREFERENCES.age_gate;
+  }
+
+  if (value.version !== AGE_GATE_VERSION) {
+    return DEFAULT_USER_PREFERENCES.age_gate;
+  }
+
+  return {
+    confirmed_at:
+      typeof value.confirmed_at === 'string' && value.confirmed_at.trim()
+        ? value.confirmed_at.trim()
+        : DEFAULT_USER_PREFERENCES.age_gate.confirmed_at,
+    minimum_age:
+      value.minimum_age === 16 || value.minimum_age === 18
+        ? value.minimum_age
+        : DEFAULT_USER_PREFERENCES.age_gate.minimum_age,
+    version: AGE_GATE_VERSION,
+  };
 }
 
 function normalizeMapCenter(value: unknown) {
@@ -161,6 +229,8 @@ export function normalizePreferences(value: Json | null): UserPreferences {
   }
 
   return {
+    age_gate: normalizeAgeGatePreferences(value.age_gate),
+    ai_consent: normalizeAiConsentPreferences(value.ai_consent),
     hide_empty_inventory:
       typeof value.hide_empty_inventory === 'boolean'
         ? value.hide_empty_inventory

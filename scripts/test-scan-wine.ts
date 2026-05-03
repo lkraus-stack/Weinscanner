@@ -41,7 +41,7 @@ type ScanWineResult = {
     vintage_year?: number | null;
     wine_name?: string;
   };
-  source: 'cache' | 'fresh' | 'low_confidence';
+  source: 'cache' | 'fresh' | 'low_confidence' | 'needs_more_info';
   wine?: { id?: string; producer?: string; wine_name?: string };
 };
 
@@ -583,17 +583,25 @@ async function runScanWineTest() {
       signInData.session.access_token,
       otherWineUrl
     );
-    const thirdHasWine =
-      thirdResult.source !== 'low_confidence' && Boolean(thirdResult.wine?.id);
+    const thirdWasHandled =
+      thirdResult.source === 'low_confidence' ||
+      thirdResult.source === 'needs_more_info' ||
+      Boolean(thirdResult.wine?.id);
 
     if (thirdResult.source === 'fresh' && thirdResult.wine?.id) {
       insertedWineIds.push(thirdResult.wine.id);
     }
 
-    record(steps, 'Anderes Bild liefert Wein', thirdHasWine);
+    record(
+      steps,
+      'Anderes Bild liefert Wein oder kontrollierte Unsicherheit',
+      thirdWasHandled
+    );
 
-    if (!thirdHasWine) {
-      throw new Error(`Anderes Bild war ${thirdResult.source}, erwartet Wein.`);
+    if (!thirdWasHandled) {
+      throw new Error(
+        `Anderes Bild war ${thirdResult.source}, erwartet Wein oder kontrollierte Unsicherheit.`
+      );
     }
 
     let noVintageUrl = getNoVintageImageUrl(env) ?? '';

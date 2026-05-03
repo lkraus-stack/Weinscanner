@@ -7,7 +7,7 @@ import {
 import { Image } from 'expo-image';
 import * as Haptics from 'expo-haptics';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -22,7 +22,12 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import {
+  AgeGateModal,
+  AiConsentModal,
+} from '@/components/compliance/AiComplianceModals';
 import { StarPicker } from '@/components/ratings/StarPicker';
+import { useAiComplianceGate } from '@/hooks/useAiComplianceGate';
 import { useInventory, type InventoryListItem } from '@/hooks/useInventory';
 import {
   useAnalyzeRestaurants,
@@ -31,6 +36,7 @@ import {
 import { useRestaurantDetail } from '@/hooks/useRestaurantDetail';
 import { useRestaurantRating } from '@/hooks/useRestaurantRating';
 import { useSavedRestaurants } from '@/hooks/useSavedRestaurants';
+import { trackAdoptionEvent } from '@/lib/analytics';
 import {
   RESTAURANT_AI_OCCASION_LABELS,
   getRestaurantVisits,
@@ -242,6 +248,7 @@ export default function RestaurantDetailScreen() {
   const queryClient = useQueryClient();
   const analyzeRestaurantsMutation = useAnalyzeRestaurants();
   const savedRestaurants = useSavedRestaurants();
+  const { modalProps, requestAiAccess } = useAiComplianceGate();
   const ratingQuery = useRestaurantRating(restaurant);
   const latestAiQuery = useLatestRestaurantAiRecommendation(restaurant?.id);
   const inventoryQuery = useInventory({ hideEmptyInventory: true });
@@ -258,6 +265,7 @@ export default function RestaurantDetailScreen() {
     createRatingFormState(null)
   );
   const [visitForm, setVisitForm] = useState<VisitFormState>({ notes: '' });
+  const viewedRestaurantIdRef = useRef<string | null>(null);
   const inventoryItems = useMemo(
     () => inventoryQuery.data?.pages.flatMap((page) => page.data) ?? [],
     [inventoryQuery.data?.pages]
@@ -287,7 +295,29 @@ export default function RestaurantDetailScreen() {
       ? restaurant?.openingHoursText ?? []
       : [todayOpeningHour];
 
+  useEffect(() => {
+    if (!restaurant?.id || viewedRestaurantIdRef.current === restaurant.id) {
+      return;
+    }
+
+    viewedRestaurantIdRef.current = restaurant.id;
+    trackAdoptionEvent('restaurant_detail_viewed', { feature: 'discover' });
+  }, [restaurant?.id]);
+
   function goBack() {
+    let canGoBack = false;
+
+    try {
+      canGoBack = router.canGoBack();
+    } catch {
+      canGoBack = false;
+    }
+
+    if (canGoBack) {
+      router.back();
+      return;
+    }
+
     if (shouldReturnToDiscover) {
       router.replace({
         pathname: '/(app)/discover' as never,
@@ -296,7 +326,7 @@ export default function RestaurantDetailScreen() {
       return;
     }
 
-    router.back();
+    router.replace('/(app)' as never);
   }
 
   const saveRatingMutation = useMutation({
@@ -323,6 +353,7 @@ export default function RestaurantDetailScreen() {
             queryKey: ['restaurant-detail'],
           }),
         ]);
+        trackAdoptionEvent('restaurant_rated', { feature: 'discover' });
       }
       setIsRatingModalOpen(false);
       showToast('Restaurant-Bewertung gespeichert');
@@ -365,7 +396,17 @@ export default function RestaurantDetailScreen() {
 
   if (detailQuery.isLoading) {
     return (
-      <SafeAreaView style={styles.screen}>
+      <SafeAreaView edges={['top']} style={styles.screen}>
+        <View style={styles.topBar}>
+          <Pressable
+            accessibilityLabel="Zurück zur Restaurant-Suche"
+            accessibilityRole="button"
+            onPress={goBack}
+            style={styles.iconButton}
+          >
+            <Ionicons color={colors.text} name="chevron-back" size={26} />
+          </Pressable>
+        </View>
         <View style={styles.loadingState}>
           <ActivityIndicator color={colors.primary} />
           <Text style={styles.loadingText}>Restaurant laden</Text>
@@ -383,7 +424,12 @@ export default function RestaurantDetailScreen() {
           <Text style={styles.emptyText}>
             Bitte öffne das Restaurant erneut aus dem Entdecken-Tab.
           </Text>
-          <Pressable onPress={goBack} style={styles.primaryButton}>
+          <Pressable
+            accessibilityLabel="Zurück zur Restaurant-Suche"
+            accessibilityRole="button"
+            onPress={goBack}
+            style={styles.primaryButton}
+          >
             <Text style={styles.primaryButtonText}>Zurück</Text>
           </Pressable>
         </View>
@@ -403,6 +449,7 @@ export default function RestaurantDetailScreen() {
         showToast('Restaurant entfernt');
       } else {
         await savedRestaurants.save(activeRestaurant);
+        trackAdoptionEvent('restaurant_saved', { feature: 'discover' });
         showToast('Restaurant gemerkt');
       }
     } catch {
@@ -458,8 +505,12 @@ export default function RestaurantDetailScreen() {
     visitMutation.mutate(item);
   }
 
-  async function startDetailAiAnalysis() {
+  async function runDetailAiAnalysis() {
     try {
+      trackAdoptionEvent('restaurant_ai_recommendation_requested', {
+        feature: 'discover',
+        tags: { entry: 'detail', occasion: 'wine_focus' },
+      });
       const run = await analyzeRestaurantsMutation.mutateAsync({
         center: activeRestaurant.location,
         contextLabel: `${activeRestaurant.name} · ${RESTAURANT_AI_OCCASION_LABELS.wine_focus}`,
@@ -480,10 +531,19 @@ export default function RestaurantDetailScreen() {
     }
   }
 
+  function startDetailAiAnalysis() {
+    requestAiAccess(runDetailAiAnalysis);
+  }
+
   return (
     <SafeAreaView edges={['top']} style={styles.screen}>
       <View style={styles.topBar}>
-        <Pressable onPress={goBack} style={styles.iconButton}>
+        <Pressable
+          accessibilityLabel="Zurück zur Restaurant-Suche"
+          accessibilityRole="button"
+          onPress={goBack}
+          style={styles.iconButton}
+        >
           <Ionicons color={colors.text} name="chevron-back" size={26} />
         </Pressable>
         <View style={styles.topBarActions}>
@@ -872,6 +932,8 @@ export default function RestaurantDetailScreen() {
         styles={styles}
         value={visitForm}
       />
+      <AgeGateModal {...modalProps.ageGate} />
+      <AiConsentModal {...modalProps.aiConsent} />
     </SafeAreaView>
   );
 }

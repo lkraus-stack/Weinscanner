@@ -16,6 +16,10 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import {
+  AgeGateModal,
+  AiConsentModal,
+} from '@/components/compliance/AiComplianceModals';
 import { AromaPills } from '@/components/scan/AromaPills';
 import { ConfidenceBadge } from '@/components/scan/ConfidenceBadge';
 import {
@@ -27,7 +31,9 @@ import {
   type VintageSuggestionKind,
 } from '@/components/scan/VintageYearPicker';
 import { WineDetailRow } from '@/components/scan/WineDetailRow';
+import { useAiComplianceGate } from '@/hooks/useAiComplianceGate';
 import { saveScan, scanWineFromLabel } from '@/lib/ai-client';
+import { trackAdoptionEvent } from '@/lib/analytics';
 import { useToastStore } from '@/stores/toast-store';
 import { useTheme, type ThemeColors } from '@/theme/ThemeProvider';
 import { radii, spacing } from '@/theme/spacing';
@@ -41,6 +47,7 @@ import type {
   WineCorrection,
   WineColor,
   WineExtraction,
+  WineVerification,
 } from '@/types/wine-extraction';
 
 type DisplayRow = {
@@ -63,6 +70,7 @@ type VintageSuggestion = {
 const LOADING_MESSAGES = [
   'KI analysiert dein Etikett...',
   'Wein wird identifiziert...',
+  'Herstellerdaten werden geprüft...',
   'Details werden gesammelt...',
 ] as const;
 
@@ -154,6 +162,16 @@ function formatWineLabel(value: string | null) {
   return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
+function grapeVarietyText(extraction: WineExtraction) {
+  const grapes = Array.isArray(extraction.grape_varieties)
+    ? extraction.grape_varieties
+    : [];
+
+  return grapes.length > 0
+    ? grapes.join(', ')
+    : extraction.grape_variety;
+}
+
 function buildTitle(extraction: WineExtraction) {
   const producer = extraction.producer || 'Unbekanntes Weingut';
   const wineName = extraction.wine_name || 'Weinname nicht erkannt';
@@ -180,7 +198,7 @@ function buildLabelRows(extraction: WineExtraction): DisplayRow[] {
     { label: 'Region', value: valueOrDash(extraction.region) },
     { label: 'Land', value: valueOrDash(extraction.country) },
     { label: 'Appellation', value: valueOrDash(extraction.appellation) },
-    { label: 'Rebsorte', value: valueOrDash(extraction.grape_variety) },
+    { label: 'Rebsorte', value: valueOrDash(grapeVarietyText(extraction)) },
     { label: 'Farbe', value: formatWineLabel(extraction.wine_color) },
     { label: 'Geschmack', value: formatWineLabel(extraction.taste_dryness) },
     { label: 'Alkohol', value: formatPercent(extraction.alcohol_percent) },
@@ -235,7 +253,11 @@ function needsBackLabelScan(
 
   return (
     visibleVintageYear === null ||
-    vintageConfidence < 0.5
+    vintageConfidence < 0.5 ||
+    extraction.verification?.status === 'conflict' ||
+    extraction.verification?.status === 'needs_more_info' ||
+    extraction.verification?.field_status.grapes === 'conflict' ||
+    extraction.verification?.field_status.grapes === 'needs_more_info'
   );
 }
 
@@ -324,7 +346,8 @@ function buildCorrections(
 
 function emptyExtractionFromMinimal(
   minimal: MinimalWineExtraction,
-  notes: string
+  notes: string,
+  verification?: WineVerification
 ): WineExtraction {
   return {
     alcohol_percent: null,
@@ -339,6 +362,9 @@ function emptyExtractionFromMinimal(
     drinking_window_start: null,
     food_pairing: null,
     grape_variety: minimal.grape_variety,
+    grape_varieties: Array.isArray(minimal.grape_varieties)
+      ? minimal.grape_varieties
+      : [],
     needs_more_info_reason: minimal.needs_more_info_reason,
     notes,
     photo_quality: minimal.photo_quality,
@@ -353,9 +379,21 @@ function emptyExtractionFromMinimal(
     vinification: null,
     vintage_year: minimal.vintage_year,
     visible_text_lines: minimal.visible_text_lines,
+    verification,
     wine_color: null,
     wine_name: minimal.wine_name,
   };
+}
+
+function splitGrapeVarieties(value: string | null) {
+  if (!value) {
+    return [];
+  }
+
+  return value
+    .split(/[,;/]+|\s+-\s+/)
+    .map((item) => item.trim())
+    .filter(Boolean);
 }
 
 function vintageToExtraction(
@@ -377,6 +415,11 @@ function vintageToExtraction(
     drinking_window_start: vintage?.drinking_window_start ?? null,
     food_pairing: vintage?.food_pairing ?? null,
     grape_variety: result.wine.grape_variety,
+    grape_varieties:
+      Array.isArray(result.minimal.grape_varieties) &&
+      result.minimal.grape_varieties.length > 0
+        ? result.minimal.grape_varieties
+        : splitGrapeVarieties(result.wine.grape_variety),
     needs_more_info_reason: result.minimal.needs_more_info_reason,
     notes: '',
     photo_quality: result.minimal.photo_quality,
@@ -391,6 +434,7 @@ function vintageToExtraction(
     vinification: vintage?.vinification ?? null,
     vintage_year: vintage?.vintage_year ?? result.minimal.vintage_year,
     visible_text_lines: result.minimal.visible_text_lines,
+    verification: result.verification,
     wine_color: wineColorOrNull(result.wine.wine_color),
     wine_name: result.wine.wine_name,
   };
@@ -398,7 +442,10 @@ function vintageToExtraction(
 
 function extractionFromScanResult(result: ScanWineResult): WineExtraction {
   if (result.source === 'fresh') {
-    return result.extraction;
+    return {
+      ...result.extraction,
+      verification: result.extraction.verification ?? result.verification,
+    };
   }
 
   if (result.source === 'cache') {
@@ -409,7 +456,8 @@ function extractionFromScanResult(result: ScanWineResult): WineExtraction {
     result.minimal,
     result.source === 'needs_more_info'
       ? result.reason
-      : 'Die Vorderseite war zu unsicher. Bitte scanne das Rücketikett oder gib die Daten später manuell ein.'
+      : 'Die Vorderseite war zu unsicher. Bitte scanne das Rücketikett oder gib die Daten später manuell ein.',
+    result.source === 'needs_more_info' ? result.verification : undefined
   );
 }
 
@@ -423,8 +471,17 @@ function getSourceHint(result: ScanWineResult) {
   }
 
   if (result.source === 'fresh') {
+    if (!result.verification.safe_to_persist_enrichment) {
+      return {
+        description:
+          'Identität wurde erkannt. Beschreibungen werden erst nach Faktenprüfung sicher angezeigt.',
+        icon: 'shield-checkmark-outline' as const,
+        title: 'Details werden vorsichtig behandelt',
+      };
+    }
+
     return {
-      description: 'Der Wein wurde neu analysiert und global vorgemerkt.',
+      description: 'Der Wein wurde neu analysiert und geprüfte Details wurden übernommen.',
       icon: 'sparkles-outline' as const,
       title: 'Wein wurde frisch analysiert',
     };
@@ -442,6 +499,61 @@ function getSourceHint(result: ScanWineResult) {
     description: 'Für eine sichere Erkennung brauchen wir eine zweite Ansicht.',
     icon: 'scan-circle-outline' as const,
     title: 'Weitere Infos nötig',
+  };
+}
+
+function getVerificationCopy(verification: WineVerification) {
+  if (verification.source_status === 'found') {
+    return {
+      color: 'success' as const,
+      icon: 'shield-checkmark-outline' as const,
+      text: 'Rebsorten und Details wurden mit einer Herstellerquelle abgeglichen.',
+      title: 'Herstellerdaten geprüft',
+    };
+  }
+
+  if (verification.status === 'verified') {
+    return {
+      color: 'success' as const,
+      icon: 'checkmark-circle-outline' as const,
+      text: 'Die Details wurden gegen sichtbare Daten oder Quellen geprüft.',
+      title: 'Fakten geprüft',
+    };
+  }
+
+  if (verification.status === 'partial') {
+    return {
+      color: 'warning' as const,
+      icon: 'information-circle-outline' as const,
+      text:
+        verification.source_status === 'timeout'
+          ? 'Die Herstellerprüfung war zu langsam. Du kannst speichern und später ergänzen.'
+          : verification.source_checked
+            ? 'Es wurde keine passende Herstellerquelle gefunden. Ein Teil der Angaben bleibt ungeprüft.'
+            : 'Ein Teil der Angaben ist plausibel, aber nicht vollständig belegt.',
+      title: 'Teilweise geprüft',
+    };
+  }
+
+  if (verification.status === 'conflict') {
+    return {
+      color: 'error' as const,
+      icon: 'warning-outline' as const,
+      text: 'Die Analyse widerspricht sichtbaren Daten. Bitte Rücketikett scannen oder manuell prüfen.',
+      title: 'Widerspruch gefunden',
+    };
+  }
+
+  return {
+    color: 'warning' as const,
+    icon: 'alert-circle-outline' as const,
+    text:
+      verification.source_status === 'timeout'
+        ? 'Die Herstellerprüfung hat zu lange gedauert. Details wurden zurückgehalten.'
+        : verification.source_checked
+          ? 'Keine belastbare Herstellerquelle gefunden. Details wurden zurückgehalten.'
+          : 'Beschreibungen und Detailangaben wurden zurückgehalten, damit keine falschen Fakten gespeichert werden.',
+    title: 'Details ungeprüft',
   };
 }
 
@@ -632,6 +744,12 @@ export default function ScanConfirmScreen() {
   const queryClient = useQueryClient();
   const insets = useSafeAreaInsets();
   const showToast = useToastStore((state) => state.showToast);
+  const {
+    canUseAiFeatures,
+    isCheckingCompliance,
+    modalProps,
+    requestAiAccess,
+  } = useAiComplianceGate();
   const params = useLocalSearchParams<{
     draftScanId?: string;
     secondarySignedUrl?: string;
@@ -740,6 +858,19 @@ export default function ScanConfirmScreen() {
   }, [draftScanId, queryClient, secondaryStoragePath, signedUrl, storagePath]);
 
   useEffect(() => {
+    if (isCheckingCompliance) {
+      return;
+    }
+
+    if (!canUseAiFeatures) {
+      setIsLoading(false);
+      setErrorMessage(
+        'Für die KI-Analyse brauchen wir zuerst deine Freigabe.'
+      );
+      requestAiAccess();
+      return;
+    }
+
     let isMounted = true;
     const analysisRunId = analysisRunRef.current + 1;
     analysisRunRef.current = analysisRunId;
@@ -760,9 +891,16 @@ export default function ScanConfirmScreen() {
         setSelectedVintageYear(null);
         setAcceptedVintageSuggestion(null);
 
+        trackAdoptionEvent('wine_scan_started', { feature: 'scan' });
+
         const result = await scanWineFromLabel(signedUrl, secondarySignedUrl);
 
         if (!isMounted || analysisRunId !== analysisRunRef.current) return;
+
+        trackAdoptionEvent('wine_scan_completed', {
+          feature: 'scan',
+          tags: { result_source: result.source },
+        });
 
         const normalizedExtraction = extractionFromScanResult(result);
 
@@ -790,7 +928,14 @@ export default function ScanConfirmScreen() {
     return () => {
       isMounted = false;
     };
-  }, [retryToken, secondarySignedUrl, signedUrl]);
+  }, [
+    canUseAiFeatures,
+    isCheckingCompliance,
+    requestAiAccess,
+    retryToken,
+    secondarySignedUrl,
+    signedUrl,
+  ]);
 
   const labelRows = useMemo(
     () => (extraction ? buildLabelRows(extraction) : []),
@@ -1013,6 +1158,10 @@ export default function ScanConfirmScreen() {
 
             {scanResult ? <SourceHint result={scanResult} /> : null}
 
+            {extraction.verification ? (
+              <VerificationNotice verification={extraction.verification} />
+            ) : null}
+
             {isDraftMode || isDraftSaving || draftError ? (
               <DraftNotice
                 errorMessage={draftError}
@@ -1167,6 +1316,9 @@ export default function ScanConfirmScreen() {
         ) : null}
       </ScrollView>
 
+      <AgeGateModal {...modalProps.ageGate} />
+      <AiConsentModal {...modalProps.aiConsent} />
+
       {extraction ? (
         <EditWineModal
           onClose={() => setIsEditModalVisible(false)}
@@ -1206,6 +1358,40 @@ function SourceHint({ result }: { result: ScanWineResult }) {
       <View style={styles.sourceHintText}>
         <Text style={styles.sourceHintTitle}>{hint.title}</Text>
         <Text style={styles.sourceHintDescription}>{hint.description}</Text>
+      </View>
+    </View>
+  );
+}
+
+function VerificationNotice({
+  verification,
+}: {
+  verification: WineVerification;
+}) {
+  const { colors, styles } = useScanConfirmStyles();
+  const copy = getVerificationCopy(verification);
+  const iconColor =
+    copy.color === 'success'
+      ? colors.success
+      : copy.color === 'error'
+        ? colors.error
+        : colors.warning;
+
+  return (
+    <View style={styles.verificationNotice}>
+      <Ionicons name={copy.icon} size={22} color={iconColor} />
+      <View style={styles.sourceHintText}>
+        <Text style={styles.verificationNoticeTitle}>{copy.title}</Text>
+        <Text style={styles.sourceHintDescription}>{copy.text}</Text>
+        {verification.conflicts.length > 0 ? (
+          <View style={styles.conflictList}>
+            {verification.conflicts.slice(0, 3).map((conflict) => (
+              <Text key={conflict} style={styles.conflictText}>
+                {conflict}
+              </Text>
+            ))}
+          </View>
+        ) : null}
       </View>
     </View>
   );
@@ -1314,6 +1500,15 @@ function makeStyles(colors: ThemeColors) {
     gap: spacing.md,
     marginTop: spacing.md,
     padding: spacing.lg,
+  },
+  conflictList: {
+    gap: spacing.xs,
+    marginTop: spacing.sm,
+  },
+  conflictText: {
+    color: colors.textSecondary,
+    fontSize: typography.size.xs,
+    lineHeight: typography.lineHeight.sm,
   },
   draftNoticeTitle: {
     color: colors.text,
@@ -1544,6 +1739,22 @@ function makeStyles(colors: ThemeColors) {
     color: colors.primaryDark,
     fontSize: typography.size.lg,
     fontWeight: typography.weight.black,
+  },
+  verificationNotice: {
+    alignItems: 'flex-start',
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: spacing.md,
+    marginTop: spacing.md,
+    padding: spacing.lg,
+  },
+  verificationNoticeTitle: {
+    color: colors.text,
+    fontSize: typography.size.base,
+    fontWeight: typography.weight.extraBold,
   },
   });
 }

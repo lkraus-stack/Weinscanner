@@ -66,7 +66,25 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
         {
           NSPrivacyCollectedDataType:
             'NSPrivacyCollectedDataTypePhotosOrVideos',
-          NSPrivacyCollectedDataTypeLinked: false,
+          NSPrivacyCollectedDataTypeLinked: true,
+          NSPrivacyCollectedDataTypeTracking: false,
+          NSPrivacyCollectedDataTypePurposes: [
+            'NSPrivacyCollectedDataTypePurposeAppFunctionality',
+          ],
+        },
+        {
+          NSPrivacyCollectedDataType:
+            'NSPrivacyCollectedDataTypeOtherUserContent',
+          NSPrivacyCollectedDataTypeLinked: true,
+          NSPrivacyCollectedDataTypeTracking: false,
+          NSPrivacyCollectedDataTypePurposes: [
+            'NSPrivacyCollectedDataTypePurposeAppFunctionality',
+          ],
+        },
+        {
+          NSPrivacyCollectedDataType:
+            'NSPrivacyCollectedDataTypeSearchHistory',
+          NSPrivacyCollectedDataTypeLinked: true,
           NSPrivacyCollectedDataTypeTracking: false,
           NSPrivacyCollectedDataTypePurposes: [
             'NSPrivacyCollectedDataTypePurposeAppFunctionality',

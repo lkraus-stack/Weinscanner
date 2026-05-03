@@ -29,11 +29,12 @@ WICHTIGE REGELN:
 13. wine_name ist die spezifische Linie, Lage oder Cuvée, zum Beispiel "Le Creete", "Reserva", "Kiedrich Gräfenberg".
 14. Wenn auf dem Etikett nur ein Name steht, zum Beispiel bei einigen Bordeaux-Châteaux, darf producer und wine_name identisch sein.
 15. Fülle ALLE Felder aus dem Schema aus.
-16. Bei Anreicherungs-Feldern wie Trinkfenster, Aromen, Beschreibung, Food Pairing, Serviertemperatur und Vinifikation nutze dein Wein-Wissen oder Web-Search, wenn der Wein eindeutig identifiziert ist und confidence.overall > 0.7.
-17. Bei confidence.overall < 0.7: lasse Anreicherungs-Felder null und Listen leer.
-18. aromas enthält maximal 8 kurze deutsche Aromabegriffe.
-19. data_sources enthält nur konkrete URLs, wenn du Web-Search oder externe Quellen tatsächlich genutzt hast. Sonst [].
-20. Gib estimated_vintage_year und estimated_vintage_year_reason IMMER als Keys aus. Wenn keine plausible Schätzung möglich ist: beide null.
+16. Bei Cuvées und Mischsätzen müssen alle sichtbar oder sicher belegten Rebsorten vollständig in grape_varieties stehen. grape_variety ist nur die lesbare Zusammenfassung dieser Liste.
+17. Bei Anreicherungs-Feldern wie Trinkfenster, Aromen, Beschreibung, Food Pairing, Serviertemperatur und Vinifikation gilt: Nur ausfüllen, wenn sie direkt auf dem Label sichtbar sind oder aus einer echten konkreten Quelle stammen. Allgemeines Weinwissen darf keine Fakten behaupten.
+18. Wenn keine konkrete Quelle genutzt wurde: lasse Beschreibung, Vinifikation, Food Pairing, Trinkfenster, Preis und Aromen lieber leer, statt plausibel zu raten.
+19. aromas enthält maximal 8 kurze deutsche Aromabegriffe.
+20. data_sources enthält nur konkrete URLs, wenn externe Quellen tatsächlich genutzt wurden. Sonst [].
+21. Gib estimated_vintage_year und estimated_vintage_year_reason IMMER als Keys aus. Wenn keine plausible Schätzung möglich ist: beide null.
 
 OUTPUT-SCHEMA:
 {
@@ -46,6 +47,7 @@ OUTPUT-SCHEMA:
   "country": "string | null",
   "appellation": "string | null",
   "grape_variety": "string | null",
+  "grape_varieties": ["string"],
   "wine_color": "weiss | rot | rose | schaum | suess | null",
   "taste_dryness": "trocken | halbtrocken | lieblich | suess | null",
   "alcohol_percent": number | null,
@@ -80,13 +82,14 @@ WICHTIGE REGELN:
 2. Gib sichtbare Textzeilen möglichst exakt in visible_text_lines aus.
 3. producer ist das sichtbar gelesene Weingut oder die Kellerei.
 4. wine_name ist die sichtbar gelesene Linie, Lage oder Cuvée. Nimm nicht den bekanntesten Wein derselben Kellerei.
-5. grape_variety ist nur eine sichtbar gelesene Rebsorte, zum Beispiel "Chardonnay", "Pinot Bianco", "Riesling".
-6. Wenn auf dem Etikett "Nals Margreid", "Magred", "Chardonnay", "2024" steht: producer "Nals Margreid", wine_name "Magred", grape_variety "Chardonnay", vintage_year 2024. Niemals "Sirmian" oder "Pinot Bianco".
-7. Wenn ein Feld nicht sichtbar oder nicht sicher lesbar ist, setze null und beschreibe es in needs_more_info_reason.
-8. photo_quality ist "good", "ok" oder "poor". poor bei unscharfem Foto, zu kleinem Etikett, starker Spiegelung oder mehreren konkurrierenden Flaschen.
-9. Wenn mehrere Flaschen im Bild sind, analysiere die zentrale/große Flasche. Wenn unklar, setze needs_more_info_reason.
-10. Wenn der Jahrgang nicht sicher sichtbar ist, setze vintage_year auf null und confidence.vintage_year auf 0.
-11. Eine sichtbare Erkennung und eine Schätzung müssen getrennt bleiben:
+5. grape_variety ist die sichtbar gelesene Rebsorte oder eine lesbare Zusammenfassung mehrerer Rebsorten.
+6. grape_varieties enthält alle sichtbar gelesenen Rebsorten als Liste. Wenn nur eine sichtbar ist, enthält die Liste einen Eintrag. Wenn keine sichtbar ist, [].
+7. Wenn auf dem Etikett "Nals Margreid", "Magred", "Chardonnay", "2024" steht: producer "Nals Margreid", wine_name "Magred", grape_variety "Chardonnay", grape_varieties ["Chardonnay"], vintage_year 2024. Niemals "Sirmian" oder "Pinot Bianco".
+8. Wenn ein Feld nicht sichtbar oder nicht sicher lesbar ist, setze null und beschreibe es in needs_more_info_reason.
+9. photo_quality ist "good", "ok" oder "poor". poor bei unscharfem Foto, zu kleinem Etikett, starker Spiegelung oder mehreren konkurrierenden Flaschen.
+10. Wenn mehrere Flaschen im Bild sind, analysiere die zentrale/große Flasche. Wenn unklar, setze needs_more_info_reason.
+11. Wenn der Jahrgang nicht sicher sichtbar ist, setze vintage_year auf null und confidence.vintage_year auf 0.
+12. Eine sichtbare Erkennung und eine Schätzung müssen getrennt bleiben:
    - vintage_year ist nur für sichtbar und verlässlich gelesene Jahrgänge.
    - estimated_vintage_year darf nur eine vorsichtige Schätzung sein, wenn producer und wine_name sicher sichtbar sind.
    - estimated_vintage_year_reason erklärt kurz, warum diese Schätzung plausibel ist.
@@ -98,6 +101,7 @@ OUTPUT-SCHEMA:
   "producer": "string",
   "wine_name": "string",
   "grape_variety": "string | null",
+  "grape_varieties": ["string"],
   "vintage_year": number | null,
   "estimated_vintage_year": number | null,
   "estimated_vintage_year_reason": "string | null",

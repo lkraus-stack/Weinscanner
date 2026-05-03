@@ -33,6 +33,7 @@ export async function extractWineFull(
   const responseText = await createVisionChatCompletion({
     imageUrl: payload.imageUrl,
     maxTokens: 4000,
+    purpose: 'label',
     secondaryImageUrl: payload.secondaryImageUrl,
     signal,
     system: FULL_WINE_PROMPT,
@@ -45,16 +46,20 @@ export async function extractWineFull(
 export async function extractWineMinimal(
   imageUrl: string,
   signal: AbortSignal,
-  secondaryImageUrl?: string
+  secondaryImageUrl?: string,
+  purpose: 'label' | 'adjudicator' = 'label'
 ) {
   const responseText = await createVisionChatCompletion({
     imageUrl,
     maxTokens: 2000,
+    purpose,
     secondaryImageUrl,
     signal,
     system: MINIMAL_WINE_PROMPT,
     userText:
-      'Extrahiere nur sichtbare Label-Evidenz. Keine Weinwissen-Anreicherung und keine Sortiments-Vermutung.',
+      purpose === 'adjudicator'
+        ? 'Pruefe unabhaengig nur sichtbare Label-Evidenz. Achte besonders auf Cuvées, mehrere Rebsorten, Weinname und Verwechslungen innerhalb desselben Weinguts. Keine Weinwissen-Anreicherung.'
+        : 'Extrahiere nur sichtbare Label-Evidenz. Keine Weinwissen-Anreicherung und keine Sortiments-Vermutung.',
   });
 
   return validateMinimalWineExtraction(

@@ -22,7 +22,7 @@ export type LegalDocument = {
 export const legalDocuments = {
   privacy: {
     title: 'Datenschutzerklärung',
-    updatedAt: '02. Mai 2026',
+    updatedAt: '03. Mai 2026',
     intro:
       'Diese Datenschutzhinweise gelten für die mobile App Wine Scanner. Sie erklären, welche Daten wir verarbeiten, wenn du Weine scannst, bewertest, verwaltest, Restaurants entdeckst oder dein Konto nutzt.',
     sections: [
@@ -56,8 +56,16 @@ export const legalDocuments = {
       {
         title: 'KI-Analyse von Weinetiketten',
         body: [
-          'Wenn du ein Etikett scannst, werden das Foto oder temporäre Bild-URLs an unseren KI-Dienst übermittelt, damit Weininformationen erkannt und strukturiert zurückgegeben werden können.',
+          'Vor der ersten KI-Funktion fragen wir dich separat um Erlaubnis. Ohne diese Freigabe startet keine KI-Analyse.',
+          'Wenn du ein Etikett scannst, werden das Foto oder temporäre Bild-URLs an unsere Server und an Vantero übermittelt, damit Weininformationen erkannt und strukturiert zurückgegeben werden können.',
           'Die KI wird für die automatische Extraktion und Plausibilisierung von Weindaten eingesetzt. Deine gespeicherten App-Daten bleiben in deinem Nutzerkonto und werden nicht für Werbeprofile oder Cross-App-Tracking verwendet.',
+        ],
+      },
+      {
+        title: 'KI-Einschätzung von Restaurants',
+        body: [
+          'Wenn du eine KI-Einschätzung in Restaurant Discovery anforderst, werden Restaurantdaten, dein Suchkontext, Anlass, Filter, Suchumkreis und vorhandene Google Places Signale an unsere Server und an Vantero übermittelt.',
+          'Restaurant-KI darf nur Restaurants aus den aktuellen App-Daten bewerten und soll keine frei erfundenen Restaurants erzeugen. Ergebnisse sind Empfehlungen und ersetzen keine eigenen Prüfungen zu Öffnungszeiten, Reservierungen oder Verfügbarkeit.',
         ],
       },
       {
@@ -83,7 +91,7 @@ export const legalDocuments = {
         title: 'Drittanbieter',
         items: [
           'Supabase: Authentifizierung, Datenbank und Speicherung von App-Daten. Die produktive Datenbank wird in der EU-Region Frankfurt betrieben.',
-          'Vantero: KI-Analyse von Weinetiketten. Übermittelt werden die für die Analyse erforderlichen Etikettbilder oder temporären Bild-URLs.',
+          'Vantero: KI-Analyse von Weinetiketten und KI-Einschätzung von Restaurants. Übermittelt werden nur die für die jeweilige Analyse erforderlichen Eingaben.',
           'Sentry: Fehler- und Crash-Monitoring zur Stabilisierung der App.',
           'Apple: Sign in with Apple, sofern du diese Login-Methode nutzt. Apple verarbeitet Anmeldedaten in eigener Verantwortung.',
           'Google LLC, USA: Google Places API und Google Maps SDK für Restaurant Discovery und Kartenanzeige. Google verarbeitet diese Daten als eigener Verantwortlicher bzw. Controller im Rahmen der Google Maps Platform Bedingungen.',
@@ -99,7 +107,14 @@ export const legalDocuments = {
         title: 'Internationale Datenübermittlung',
         body: [
           'Die Hauptdatenverarbeitung für Authentifizierung, Datenbank, Storage und App-Daten erfolgt nach aktuellem Setup in der Europäischen Union.',
-          'Bei Sign in with Apple, Google Places, Google Maps und einzelnen technischen Diensten kann eine Verarbeitung in den USA stattfinden. Soweit erforderlich, stützen die Anbieter solche Übermittlungen auf geeignete Garantien, insbesondere Standardvertragsklauseln nach Art. 46 DSGVO oder andere anwendbare Übermittlungsmechanismen.',
+          'Bei Sign in with Apple, Vantero, Google Places, Google Maps und einzelnen technischen Diensten kann eine Verarbeitung außerhalb der Europäischen Union stattfinden. Soweit erforderlich, stützen die Anbieter solche Übermittlungen auf geeignete Garantien, insbesondere Standardvertragsklauseln nach Art. 46 DSGVO oder andere anwendbare Übermittlungsmechanismen.',
+        ],
+      },
+      {
+        title: 'Altersfreigabe',
+        body: [
+          'Wine Scanner richtet sich an erwachsene Nutzer. Vor KI-Funktionen fragen wir in der App eine einfache Altersbestätigung ab.',
+          'Diese technische Altersbestätigung ersetzt keine rechtliche Prüfung der App-Store-Altersfreigabe oder zusätzlicher Vorgaben in deinem Land.',
         ],
       },
       {

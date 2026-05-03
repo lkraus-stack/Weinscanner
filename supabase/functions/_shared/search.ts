@@ -87,7 +87,7 @@ function isAcceptableCacheMatch(match: Record<string, unknown>) {
 export async function searchWineInDb(
   supabase: {
     from: (table: string) => unknown;
-    rpc: (name: string, args: Record<string, unknown>) => Promise<{
+    rpc: (name: string, args: Record<string, unknown>) => PromiseLike<{
       data: unknown;
       error: Error | null;
     }>;
@@ -164,13 +164,17 @@ export async function searchWineInDb(
     break;
   }
 
-  if (!bestMatch || !isRecord(bestMatch) || !isRecord(wine)) {
+  const bestMatchId =
+    bestMatch && isRecord(bestMatch) ? stringOrNull(bestMatch.id) : null;
+
+  if (!bestMatchId || !isRecord(wine)) {
     return {
       found: false as const,
       ...(rejectedMatch ? { rejectedMatch } : {}),
     };
   }
 
+  const acceptedMatch = bestMatch as Record<string, unknown>;
   const vintagesQuery = (
     supabase.from('vintages') as {
       select: (columns: string) => {
@@ -184,7 +188,7 @@ export async function searchWineInDb(
     }
   )
     .select('*')
-    .eq('wine_id', bestMatch.id);
+    .eq('wine_id', bestMatchId);
   const { data: vintages, error: vintagesError } = await vintagesQuery.order(
     'vintage_year',
     { ascending: false }
@@ -209,10 +213,10 @@ export async function searchWineInDb(
   return {
     found: true as const,
     matchedVintage,
-    producerSimilarity: numberOrNull(bestMatch.producer_similarity) ?? 0,
-    similarity: numberOrNull(bestMatch.similarity) ?? 0,
+    producerSimilarity: numberOrNull(acceptedMatch.producer_similarity) ?? 0,
+    similarity: numberOrNull(acceptedMatch.similarity) ?? 0,
     vintages: vintageList,
     wine,
-    wineNameSimilarity: numberOrNull(bestMatch.wine_name_similarity) ?? 0,
+    wineNameSimilarity: numberOrNull(acceptedMatch.wine_name_similarity) ?? 0,
   };
 }

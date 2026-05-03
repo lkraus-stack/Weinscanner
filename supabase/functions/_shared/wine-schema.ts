@@ -13,6 +13,7 @@ export type MinimalWineExtraction = {
   estimated_vintage_year: number | null;
   estimated_vintage_year_reason: string | null;
   grape_variety: string | null;
+  grape_varieties: string[];
   needs_more_info_reason: string | null;
   photo_quality: 'good' | 'ok' | 'poor';
   producer: string;
@@ -42,6 +43,7 @@ export type WineExtraction = MinimalWineExtraction & {
   vinification: string | null;
   data_sources: string[];
   notes: string;
+  verification?: unknown;
 };
 
 export type ExtractWineRequest = {
@@ -101,6 +103,24 @@ function stringList(value: unknown, maxItems = 8): string[] {
     .map((item) => item.trim())
     .filter(Boolean)
     .slice(0, maxItems);
+}
+
+function grapeVarieties(value: unknown, fallback: string | null): string[] {
+  const parsedList = stringList(value, 12);
+
+  if (parsedList.length > 0) {
+    return parsedList;
+  }
+
+  if (!fallback) {
+    return [];
+  }
+
+  return fallback
+    .split(/[,;/]+|\s+-\s+/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .slice(0, 12);
 }
 
 function photoQuality(value: unknown): MinimalWineExtraction['photo_quality'] {
@@ -221,13 +241,21 @@ export function validateMinimalWineExtraction(
 
   const vintageYear = integerYearOrNull(value.vintage_year);
   const parsedConfidence = parseConfidence(value.confidence);
+  const parsedGrapeVariety = stringOrNull(value.grape_variety);
+  const parsedGrapeVarieties = grapeVarieties(
+    value.grape_varieties,
+    parsedGrapeVariety
+  );
 
   return {
     estimated_vintage_year: integerYearOrNull(value.estimated_vintage_year),
     estimated_vintage_year_reason: stringOrNull(
       value.estimated_vintage_year_reason
     ),
-    grape_variety: stringOrNull(value.grape_variety),
+    grape_variety:
+      parsedGrapeVariety ??
+      (parsedGrapeVarieties.length > 0 ? parsedGrapeVarieties.join(', ') : null),
+    grape_varieties: parsedGrapeVarieties,
     needs_more_info_reason: stringOrNull(value.needs_more_info_reason),
     photo_quality: photoQuality(value.photo_quality),
     producer: requiredString(value.producer, ''),

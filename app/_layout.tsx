@@ -69,7 +69,6 @@ function ThemedRootContent() {
 
     if (user) {
       Sentry.setUser({
-        email: user.email ?? undefined,
         id: user.id,
       });
     } else {

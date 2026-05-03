@@ -15,6 +15,7 @@ export type MinimalWineExtraction = {
   estimated_vintage_year: number | null;
   estimated_vintage_year_reason: string | null;
   grape_variety: string | null;
+  grape_varieties: string[];
   needs_more_info_reason: string | null;
   photo_quality: 'good' | 'ok' | 'poor';
   producer: string;
@@ -44,6 +45,34 @@ export type WineExtraction = MinimalWineExtraction & {
   vinification: string | null;
   data_sources: string[];
   notes: string;
+  verification?: WineVerification;
+};
+
+export type WineVerificationStatus =
+  | 'verified'
+  | 'partial'
+  | 'unverified'
+  | 'conflict'
+  | 'needs_more_info';
+
+export type WineEnrichmentField =
+  | 'grapes'
+  | 'description'
+  | 'vinification'
+  | 'aromas'
+  | 'food_pairing'
+  | 'drinking_window';
+
+export type WineVerification = {
+  conflicts: string[];
+  field_status: Record<WineEnrichmentField, WineVerificationStatus>;
+  model_notes: string[];
+  requires_second_vision: boolean;
+  safe_to_persist_enrichment: boolean;
+  source_checked?: boolean;
+  source_status?: 'found' | 'not_found' | 'timeout' | 'error';
+  status: WineVerificationStatus;
+  verified_data_sources: string[];
 };
 
 export type WineRecord = Tables<'wines'>;
@@ -57,6 +86,7 @@ export type ScanWineResult =
     }
   | {
       minimal: MinimalWineExtraction;
+      verification?: WineVerification;
       reason: string;
       source: 'needs_more_info';
     }
@@ -64,6 +94,7 @@ export type ScanWineResult =
       matchedVintage: VintageRecord | null;
       minimal: MinimalWineExtraction;
       source: 'cache';
+      verification?: WineVerification;
       vintages: VintageRecord[];
       wine: WineRecord;
     }
@@ -72,6 +103,7 @@ export type ScanWineResult =
       matchedVintage: VintageRecord | null;
       minimal: MinimalWineExtraction;
       source: 'fresh';
+      verification: WineVerification;
       vintage: VintageRecord | null;
       vintages: VintageRecord[];
       wine: WineRecord;

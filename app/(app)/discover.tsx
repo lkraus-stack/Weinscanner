@@ -2,8 +2,19 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { Image } from 'expo-image';
 import * as Haptics from 'expo-haptics';
 import * as Location from 'expo-location';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import {
+  useFocusEffect,
+  useLocalSearchParams,
+  useRouter,
+} from 'expo-router';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -20,16 +31,26 @@ import {
 import MapView, {
   Marker,
   PROVIDER_GOOGLE,
+  type MapPressEvent,
   type Region,
 } from 'react-native-maps';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import {
+  AgeGateModal,
+  AiConsentModal,
+} from '@/components/compliance/AiComplianceModals';
 import { WineIndicatorBadge } from '@/components/discover/WineIndicatorBadge';
+import { useAiComplianceGate } from '@/hooks/useAiComplianceGate';
 import { usePreferences } from '@/hooks/usePreferences';
 import { useAnalyzeRestaurants } from '@/hooks/useRestaurantAi';
 import { useRestaurantSearch } from '@/hooks/useRestaurantSearch';
 import { useSavedRestaurants } from '@/hooks/useSavedRestaurants';
 import { env } from '@/lib/env';
+import {
+  sanitizeCityTag,
+  trackAdoptionEvent,
+} from '@/lib/analytics';
 import {
   DEFAULT_RESTAURANT_REGION,
   RESTAURANT_AI_OCCASION_LABELS,
@@ -289,6 +310,7 @@ export default function DiscoverScreen() {
   const analyzeRestaurantsMutation = useAnalyzeRestaurants();
   const savedRestaurants = useSavedRestaurants();
   const showToast = useToastStore((state) => state.showToast);
+  const { modalProps, requestAiAccess } = useAiComplianceGate();
   const initialRegion = useMemo(
     () => getInitialRegion(preferencesQuery.preferences),
     [preferencesQuery.preferences]
@@ -378,16 +400,42 @@ export default function DiscoverScreen() {
     restaurants.length > 0 &&
     !restaurantQuery.isLoading;
 
+  useFocusEffect(
+    useCallback(() => {
+      trackAdoptionEvent('discover_tab_opened', { feature: 'discover' });
+    }, [])
+  );
+
   useEffect(() => {
     const preferredView = normalizeRestaurantViewMode(params.preferredView);
 
-    if (!preferredView || preferredView === viewMode) {
+    if (!preferredView) {
       return;
     }
 
+    setSelectedRestaurant(null);
     setMode('search');
+
+    if (preferredView === viewMode) {
+      return;
+    }
+
     setViewMode(preferredView);
   }, [params.preferredView, viewMode]);
+
+  useEffect(() => {
+    if (!selectedRestaurant) {
+      return;
+    }
+
+    const isSelectedRestaurantVisible = restaurants.some(
+      (restaurant) => restaurant.id === selectedRestaurant.id
+    );
+
+    if (!isSelectedRestaurantVisible) {
+      setSelectedRestaurant(null);
+    }
+  }, [restaurants, selectedRestaurant]);
 
   function persistDiscoveryPreference(
     nextPreference: Partial<
@@ -477,6 +525,10 @@ export default function DiscoverScreen() {
       setCityQuery(result.label);
       setViewMode('map');
       setMode('search');
+      trackAdoptionEvent('discover_search_executed', {
+        feature: 'discover',
+        tags: { city: sanitizeCityTag(result.label) },
+      });
       persistDiscoveryPreference({
         last_city: result.label,
         preferred_view: 'map',
@@ -505,11 +557,18 @@ export default function DiscoverScreen() {
   }
 
   function switchViewMode(nextMode: RestaurantViewMode) {
+    setSelectedRestaurant(null);
     setViewMode(nextMode);
     persistDiscoveryPreference({ preferred_view: nextMode });
   }
 
+  function switchDiscoverMode(nextMode: DiscoverMode) {
+    setSelectedRestaurant(null);
+    setMode(nextMode);
+  }
+
   function resetFilters() {
+    setSelectedRestaurant(null);
     setOpenNowOnly(false);
     setMinRating(null);
     setRadiusMeters(5000);
@@ -525,26 +584,31 @@ export default function DiscoverScreen() {
   }
 
   function updateOpenNowFilter(nextValue: boolean) {
+    setSelectedRestaurant(null);
     setOpenNowOnly(nextValue);
     persistDiscoveryPreference({ open_now: nextValue });
   }
 
   function updateMinRatingFilter(nextValue: number | null) {
+    setSelectedRestaurant(null);
     setMinRating(nextValue);
     persistDiscoveryPreference({ min_rating: nextValue });
   }
 
   function updateRadiusFilter(nextValue: number) {
+    setSelectedRestaurant(null);
     setRadiusMeters(nextValue);
     persistDiscoveryPreference({ radius_meters: nextValue });
   }
 
   function updateQualityFilter(nextValue: RestaurantQualityMode) {
+    setSelectedRestaurant(null);
     setQualityMode(nextValue);
     persistDiscoveryPreference({ quality_mode: nextValue });
   }
 
   function updateCuisineFilter(nextValue: string | null) {
+    setSelectedRestaurant(null);
     setCuisineType(nextValue);
     persistDiscoveryPreference({ cuisine_type: nextValue });
   }
@@ -556,6 +620,7 @@ export default function DiscoverScreen() {
         showToast('Restaurant entfernt');
       } else {
         await savedRestaurants.save(restaurant);
+        trackAdoptionEvent('restaurant_saved', { feature: 'discover' });
         showToast('Restaurant gemerkt');
       }
     } catch {
@@ -563,7 +628,7 @@ export default function DiscoverScreen() {
     }
   }
 
-  async function startAiRecommendation(occasion: RestaurantAiOccasion) {
+  async function runAiRecommendation(occasion: RestaurantAiOccasion) {
     if (!canUseAiRecommendation) {
       showToast(
         'KI-Empfehlung ist verfügbar, sobald echte Google-Daten geladen sind.'
@@ -573,6 +638,10 @@ export default function DiscoverScreen() {
 
     try {
       await Haptics.selectionAsync();
+      trackAdoptionEvent('restaurant_ai_recommendation_requested', {
+        feature: 'discover',
+        tags: { entry: 'discover', occasion },
+      });
       const contextLabel = [
         cityQuery.trim() || 'Aktuelle Karte',
         RESTAURANT_AI_OCCASION_LABELS[occasion],
@@ -603,7 +672,17 @@ export default function DiscoverScreen() {
     }
   }
 
+  function startAiRecommendation(occasion: RestaurantAiOccasion) {
+    requestAiAccess(() => runAiRecommendation(occasion));
+  }
+
+  function selectRestaurantMarker(restaurant: RestaurantRecord) {
+    trackAdoptionEvent('restaurant_marker_tapped', { feature: 'discover' });
+    setSelectedRestaurant(restaurant);
+  }
+
   function openRestaurantDetail(restaurant: RestaurantRecord) {
+    setSelectedRestaurant(null);
     router.push({
       pathname: '/restaurant-detail' as never,
       params: {
@@ -647,6 +726,14 @@ export default function DiscoverScreen() {
     mapRef.current?.animateToRegion(nextRegion, 350);
   }
 
+  function handleMapPress(event: MapPressEvent) {
+    if (event.nativeEvent.action === 'marker-press') {
+      return;
+    }
+
+    setSelectedRestaurant(null);
+  }
+
   function renderMap() {
     if (!hasMapsKey) {
       return (
@@ -666,6 +753,7 @@ export default function DiscoverScreen() {
       <MapView
         ref={mapRef}
         initialRegion={initialRegion}
+        onPress={handleMapPress}
         onRegionChangeComplete={(nextRegion) => {
           setRegion(nextRegion);
           setHasPendingRegion(true);
@@ -695,7 +783,7 @@ export default function DiscoverScreen() {
             <Marker
               coordinate={point.coordinate}
               key={point.restaurant.id}
-              onPress={() => setSelectedRestaurant(point.restaurant)}
+              onPress={() => selectRestaurantMarker(point.restaurant)}
               tracksViewChanges={isSelected}
             >
               {isSelected ? (
@@ -796,14 +884,14 @@ export default function DiscoverScreen() {
             active={mode === 'search'}
             icon="compass-outline"
             label="Entdecken"
-            onPress={() => setMode('search')}
+            onPress={() => switchDiscoverMode('search')}
             styles={styles}
           />
           <SegmentButton
             active={mode === 'saved'}
             icon="heart-outline"
             label="Gemerkt"
-            onPress={() => setMode('saved')}
+            onPress={() => switchDiscoverMode('saved')}
             styles={styles}
           />
         </View>
@@ -865,7 +953,9 @@ export default function DiscoverScreen() {
               {canUseAiRecommendation ? (
                 <Pressable
                   accessibilityLabel="KI-Empfehlung öffnen"
-                  onPress={() => setIsAiSheetOpen(true)}
+                  onPress={() =>
+                    requestAiAccess(() => setIsAiSheetOpen(true))
+                  }
                   style={styles.aiCompactButton}
                 >
                   <Ionicons color={colors.white} name="sparkles" size={17} />
@@ -920,6 +1010,7 @@ export default function DiscoverScreen() {
           {selectedRestaurant && (
             <RestaurantPreview
               isSaved={savedRestaurants.isSaved(selectedRestaurant)}
+              onClose={() => setSelectedRestaurant(null)}
               onDetail={() => openRestaurantDetail(selectedRestaurant)}
               onNavigate={() => openNavigation(selectedRestaurant)}
               onSave={() => void toggleSaved(selectedRestaurant)}
@@ -965,6 +1056,8 @@ export default function DiscoverScreen() {
         restaurants={restaurants}
         styles={styles}
       />
+      <AgeGateModal {...modalProps.ageGate} />
+      <AiConsentModal {...modalProps.aiConsent} />
       <RestaurantFilterSheet
         cuisineType={cuisineType}
         isOpen={isFilterSheetOpen}
@@ -1522,10 +1615,29 @@ function RestaurantImageFallback({
   );
 }
 
-function RestaurantPreview(props: RestaurantCardProps) {
+type RestaurantPreviewProps = RestaurantCardProps & {
+  onClose: () => void;
+};
+
+function RestaurantPreview({ onClose, ...cardProps }: RestaurantPreviewProps) {
   return (
-    <View style={props.styles.previewCard}>
-      <RestaurantCard {...props} onPress={props.onDetail} />
+    <View style={cardProps.styles.previewCard}>
+      <Pressable
+        accessibilityLabel="Restaurant-Vorschau schließen"
+        accessibilityRole="button"
+        onPress={(event: GestureResponderEvent) => {
+          event.stopPropagation();
+          onClose();
+        }}
+        style={cardProps.styles.previewCloseButton}
+      >
+        <Ionicons
+          name="close"
+          size={20}
+          style={cardProps.styles.previewCloseIcon}
+        />
+      </Pressable>
+      <RestaurantCard {...cardProps} onPress={cardProps.onDetail} />
     </View>
   );
 }
@@ -2094,6 +2206,25 @@ function makeStyles(colors: ThemeColors) {
       left: spacing.md,
       position: 'absolute',
       right: spacing.md,
+    },
+    previewCloseButton: {
+      alignItems: 'center',
+      alignSelf: 'flex-end',
+      backgroundColor: colors.surface,
+      borderColor: colors.border,
+      borderRadius: radii.pill,
+      borderWidth: 1,
+      height: 40,
+      justifyContent: 'center',
+      marginBottom: spacing.xs,
+      shadowColor: colors.shadow,
+      shadowOffset: { height: 4, width: 0 },
+      shadowOpacity: 0.12,
+      shadowRadius: 10,
+      width: 40,
+    },
+    previewCloseIcon: {
+      color: colors.text,
     },
     primaryAction: {
       alignItems: 'center',

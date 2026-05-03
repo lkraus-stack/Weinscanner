@@ -2,7 +2,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { Image } from 'expo-image';
 import * as Haptics from 'expo-haptics';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -18,6 +18,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useInventory, type InventoryListItem } from '@/hooks/useInventory';
 import { useRestaurantRecommendationRun } from '@/hooks/useRestaurantAi';
 import { useSavedRestaurants } from '@/hooks/useSavedRestaurants';
+import { trackAdoptionEvent } from '@/lib/analytics';
 import { RESTAURANT_AI_OCCASION_LABELS } from '@/lib/restaurants';
 import { useToastStore } from '@/stores/toast-store';
 import { radii, spacing } from '@/theme/spacing';
@@ -106,6 +107,7 @@ export default function RestaurantAiResultsScreen() {
   const showToast = useToastStore((state) => state.showToast);
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
+  const viewedRunIdRef = useRef<string | null>(null);
   const inventoryItems = useMemo(
     () => inventoryQuery.data?.pages.flatMap((page) => page.data) ?? [],
     [inventoryQuery.data?.pages]
@@ -118,6 +120,17 @@ export default function RestaurantAiResultsScreen() {
   const bestRecommendation = run?.recommendations[0] ?? null;
   const alternatives = run?.recommendations.slice(1, 3) ?? [];
 
+  useEffect(() => {
+    if (!run?.id || !bestRecommendation || viewedRunIdRef.current === run.id) {
+      return;
+    }
+
+    viewedRunIdRef.current = run.id;
+    trackAdoptionEvent('restaurant_ai_detail_viewed', {
+      feature: 'discover',
+    });
+  }, [bestRecommendation, run?.id]);
+
   async function toggleSaved(restaurant: RestaurantRecord) {
     try {
       await Haptics.selectionAsync();
@@ -127,6 +140,7 @@ export default function RestaurantAiResultsScreen() {
         showToast('Restaurant entfernt');
       } else {
         await savedRestaurants.save(restaurant);
+        trackAdoptionEvent('restaurant_saved', { feature: 'discover' });
         showToast('Restaurant gemerkt');
       }
     } catch {
