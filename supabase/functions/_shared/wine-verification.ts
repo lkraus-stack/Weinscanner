@@ -72,9 +72,10 @@ REGELN:
 2. Sichtbare Label-Evidenz ist fuehrend.
 3. Allgemeines Weinwissen ist keine Quelle.
 4. Beschreibungen, Vinifikation, Food Pairing, Aromen und Trinkfenster duerfen nur als persistierbar gelten, wenn sie aus sichtbarer Evidenz oder konkreten URLs gedeckt sind.
-5. Bei Cuvées und Mischsaetzen pruefe fehlende oder falsche Rebsorten streng.
-6. Wenn etwas plausibel klingt, aber nicht belegbar ist, ist es unverified.
-7. Wenn sichtbare Evidenz und Analyse widersprechen, ist es conflict.
+5. Ruecketikett-Text ist sichtbare Evidenz. Wenn Alkohol, Appellation, Rebsorte, Vinifikation, Serviertemperatur oder Trinkreife dort sichtbar stehen, duerfen diese Felder verified sein.
+6. Bei Cuvées und Mischsaetzen pruefe fehlende oder falsche Rebsorten streng.
+7. Wenn etwas plausibel klingt, aber nicht belegbar ist, ist es unverified.
+8. Wenn sichtbare Evidenz und Analyse widersprechen, ist es conflict.
 
 OUTPUT:
 {
@@ -965,6 +966,34 @@ export async function verifyOfficialWineSource(
   return null;
 }
 
+function inferWineColorFromSourceGrapes(grapeVarieties: string[]) {
+  if (grapeVarieties.length === 0) {
+    return null;
+  }
+
+  const whiteGrapes = [
+    'chardonnay',
+    'pinot bianco',
+    'pinot blanc',
+    'pinot grigio',
+    'pinot gris',
+    'riesling',
+    'sauvignon',
+    'sauvignon blanc',
+    'verdicchio',
+    'weissburgunder',
+    'weißburgunder',
+  ];
+  const normalizedGrapes = grapeVarieties.map((grape) =>
+    normalizeText(grape)
+  );
+  const allWhite = normalizedGrapes.every((grape) =>
+    whiteGrapes.some((whiteGrape) => grape.includes(normalizeText(whiteGrape)))
+  );
+
+  return allWhite ? 'weiss' : null;
+}
+
 export function mergeOfficialSource(
   extraction: WineExtraction,
   source: OfficialSourceResult
@@ -973,6 +1002,9 @@ export function mergeOfficialSource(
     source.grape_varieties.length > 0
       ? source.grape_varieties.join(', ')
       : extraction.grape_variety;
+  const sourceWineColor = inferWineColorFromSourceGrapes(
+    source.grape_varieties
+  );
 
   return {
     ...extraction,
@@ -994,6 +1026,7 @@ export function mergeOfficialSource(
         ? source.grape_varieties
         : extraction.grape_varieties,
     vinification: source.vinification ?? extraction.vinification,
+    wine_color: sourceWineColor ?? extraction.wine_color,
   };
 }
 
@@ -1003,11 +1036,13 @@ function canKeepField(
   hasTrustedSource: boolean
 ) {
   const fieldStatus = verification.field_status[field];
+  const isVerifiedByLabel = fieldStatus === 'verified';
 
   return (
-    hasTrustedSource &&
-    verification.safe_to_persist_enrichment &&
-    (fieldStatus === 'verified' || fieldStatus === 'partial')
+    isVerifiedByLabel ||
+    (hasTrustedSource &&
+      verification.safe_to_persist_enrichment &&
+      (fieldStatus === 'verified' || fieldStatus === 'partial'))
   );
 }
 
@@ -1040,6 +1075,13 @@ export function sanitizeExtractionForVerification(
     'drinking_window',
     hasTrustedSource
   );
+  const servingTemperatureAllowed =
+    Boolean(extraction.serving_temperature) &&
+    (hasTrustedSource ||
+      drinkingWindowAllowed ||
+      foodPairingAllowed ||
+      vinificationAllowed ||
+      verification.status === 'verified');
   const notes = [
     extraction.notes,
     verification.status === 'verified'
@@ -1066,7 +1108,7 @@ export function sanitizeExtractionForVerification(
     notes,
     price_max_eur: drinkingWindowAllowed ? extraction.price_max_eur : null,
     price_min_eur: drinkingWindowAllowed ? extraction.price_min_eur : null,
-    serving_temperature: foodPairingAllowed
+    serving_temperature: servingTemperatureAllowed
       ? extraction.serving_temperature
       : null,
     verification,

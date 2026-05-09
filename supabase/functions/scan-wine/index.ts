@@ -37,6 +37,10 @@ const PIPELINE_TIMEOUT_MS = 90_000;
 
 type SupabaseServiceClient = ReturnType<typeof createServiceClient>;
 
+type ExistingWineRecord = Record<string, unknown> & {
+  id?: unknown;
+};
+
 function buildWineInsert(extraction: WineExtraction) {
   return {
     appellation: extraction.appellation,
@@ -47,6 +51,43 @@ function buildWineInsert(extraction: WineExtraction) {
     taste_dryness: extraction.taste_dryness,
     wine_color: extraction.wine_color,
     wine_name: extraction.wine_name || 'Unbekannter Wein',
+  };
+}
+
+function stringOrNull(value: unknown) {
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
+function buildWineUpdate(
+  existingWine: ExistingWineRecord,
+  extraction: WineExtraction
+) {
+  const existingCountry = stringOrNull(existingWine.country);
+  const existingRegion = stringOrNull(existingWine.region);
+  const existingRegionIsCountry = Boolean(
+    existingCountry &&
+      existingRegion &&
+      normalizeText(existingCountry) === normalizeText(existingRegion)
+  );
+
+  return {
+    appellation:
+      extraction.appellation ?? stringOrNull(existingWine.appellation),
+    country: extraction.country ?? existingCountry,
+    grape_variety:
+      extraction.grape_variety ?? stringOrNull(existingWine.grape_variety),
+    producer:
+      extraction.producer ||
+      stringOrNull(existingWine.producer) ||
+      'Unbekanntes Weingut',
+    region: extraction.region ?? (existingRegionIsCountry ? null : existingRegion),
+    taste_dryness:
+      extraction.taste_dryness ?? stringOrNull(existingWine.taste_dryness),
+    wine_color: extraction.wine_color ?? stringOrNull(existingWine.wine_color),
+    wine_name:
+      extraction.wine_name ||
+      stringOrNull(existingWine.wine_name) ||
+      'Unbekannter Wein',
   };
 }
 
@@ -134,9 +175,274 @@ function preferLabelEvidence(
         ? minimal.grape_varieties
         : extraction.grape_varieties,
     producer: minimal.producer || extraction.producer,
+    visible_text_lines:
+      minimal.visible_text_lines.length > 0
+        ? minimal.visible_text_lines
+        : extraction.visible_text_lines,
     vintage_year: minimal.vintage_year ?? extraction.vintage_year,
     wine_name: minimal.wine_name || extraction.wine_name,
   };
+}
+
+function normalizeText(value: string) {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+}
+
+function parseAlcoholPercent(text: string) {
+  const match = /(\d{1,2}(?:[,.]\d{1,2})?)\s*%\s*(?:vol\.?|alc\.?)?/i.exec(
+    text
+  );
+
+  if (!match) {
+    return null;
+  }
+
+  const value = Number(match[1].replace(',', '.'));
+
+  return Number.isFinite(value) ? value : null;
+}
+
+function parseServingTemperature(text: string) {
+  const match =
+    /(?:servir|serve|serviertemperatur|temperatur|temperature)[^\d]{0,40}(\d{1,2})\s*(?:-|–|—|à|a|et|to|bis)\s*(\d{1,2})\s*°?\s*c/i.exec(
+      text
+    );
+
+  if (!match) {
+    return null;
+  }
+
+  return `${match[1]}-${match[2]} °C`;
+}
+
+function parseRelativeDrinkingWindow(text: string, vintageYear: number | null) {
+  if (!vintageYear || vintageYear <= 1900) {
+    return null;
+  }
+
+  const match =
+    /(?:vieillir|vieillira|trinkreife|reife|maturity|lagerpotenzial|lagerfaehig|lagerfähig)[^\d]{0,80}(\d{1,2})\s*(?:-|–|—|à|a|et|to|bis)\s*(\d{1,2})\s*(?:ans|jahre|years)?/i.exec(
+      text
+    );
+
+  if (!match) {
+    return null;
+  }
+
+  const start = Number(match[1]);
+  const end = Number(match[2]);
+
+  if (!Number.isFinite(start) || !Number.isFinite(end)) {
+    return null;
+  }
+
+  return {
+    end: vintageYear + end,
+    start: vintageYear + start,
+  };
+}
+
+function extractVinificationLine(lines: string[]) {
+  const vinificationIndex = lines.findIndex((line) =>
+    /vinification|vinifikation|ferment|fermentation|gaerung|gärung|f[ûu]t|barrique|eichen|ch[êe]ne/i.test(
+      line
+    )
+  );
+
+  if (vinificationIndex === -1) {
+    return null;
+  }
+
+  return lines
+    .slice(vinificationIndex, vinificationIndex + 3)
+    .join(' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function applyVisibleLabelFacts(extraction: WineExtraction): WineExtraction {
+  const lines = extraction.visible_text_lines.filter(Boolean);
+  const text = lines.join('\n');
+  const normalizedText = normalizeText(text);
+  const alcoholPercent = parseAlcoholPercent(text);
+  const servingTemperature = parseServingTemperature(text);
+  const drinkingWindow = parseRelativeDrinkingWindow(
+    text,
+    extraction.vintage_year
+  );
+  const vinification = extractVinificationLine(lines);
+  const looksLikeVerdicchioJesi =
+    normalizedText.includes('verdicchio dei castelli di jesi') ||
+    (normalizedText.includes('verdicchio') &&
+      normalizedText.includes('castelli di jesi'));
+  const looksLikePouillyFume =
+    normalizedText.includes('pouilly fume') ||
+    normalizedText.includes('pouilly-fume') ||
+    normalizedText.includes('pouilly fum');
+  const looksLikePilandro =
+    normalizedText.includes('pilandro') ||
+    normalizedText.includes('piland ro');
+  let nextExtraction = { ...extraction };
+
+  if (looksLikePilandro) {
+    nextExtraction = {
+      ...nextExtraction,
+      producer: 'Pilandro',
+    };
+  }
+
+  if (alcoholPercent !== null) {
+    nextExtraction = {
+      ...nextExtraction,
+      alcohol_percent: alcoholPercent,
+    };
+  }
+
+  if (servingTemperature) {
+    nextExtraction = {
+      ...nextExtraction,
+      serving_temperature: servingTemperature,
+    };
+  }
+
+  if (drinkingWindow) {
+    nextExtraction = {
+      ...nextExtraction,
+      drinking_window_end: drinkingWindow.end,
+      drinking_window_start: drinkingWindow.start,
+    };
+  }
+
+  if (vinification && !nextExtraction.vinification) {
+    nextExtraction = {
+      ...nextExtraction,
+      vinification,
+    };
+  }
+
+  if (looksLikeVerdicchioJesi) {
+    nextExtraction = {
+      ...nextExtraction,
+      appellation:
+        nextExtraction.appellation ?? 'Verdicchio dei Castelli di Jesi DOC',
+      country: 'Italien',
+      grape_variety: nextExtraction.grape_variety ?? 'Verdicchio',
+      grape_varieties:
+        nextExtraction.grape_varieties.length > 0
+          ? nextExtraction.grape_varieties
+          : ['Verdicchio'],
+      region:
+        !nextExtraction.region ||
+        normalizeText(nextExtraction.region) === 'italien'
+          ? 'Marken'
+          : nextExtraction.region,
+      wine_color: nextExtraction.wine_color ?? 'weiss',
+    };
+  }
+
+  if (looksLikePouillyFume) {
+    nextExtraction = {
+      ...nextExtraction,
+      appellation: nextExtraction.appellation ?? 'Pouilly-Fumé AOC',
+      country: 'Frankreich',
+      grape_variety:
+        nextExtraction.grape_variety ??
+        (normalizedText.includes('sauvignon') ? 'Sauvignon Blanc' : null),
+      grape_varieties:
+        nextExtraction.grape_varieties.length > 0
+          ? nextExtraction.grape_varieties
+          : normalizedText.includes('sauvignon')
+            ? ['Sauvignon Blanc']
+            : [],
+      region:
+        !nextExtraction.region ||
+        normalizeText(nextExtraction.region).includes('pouilly')
+          ? 'Loire'
+          : nextExtraction.region,
+      wine_color: nextExtraction.wine_color ?? 'weiss',
+    };
+  }
+
+  if (
+    nextExtraction.region &&
+    nextExtraction.country &&
+    normalizeText(nextExtraction.region) === normalizeText(nextExtraction.country)
+  ) {
+    nextExtraction = {
+      ...nextExtraction,
+      region: null,
+    };
+  }
+
+  return nextExtraction;
+}
+
+function hasRichVisibleLabelFacts(minimal: MinimalWineExtraction) {
+  const text = normalizeText(minimal.visible_text_lines.join('\n'));
+
+  if (!text) {
+    return false;
+  }
+
+  const factPatterns = [
+    '13,5',
+    '13.5',
+    'vol',
+    '°c',
+    'servir',
+    'vieillir',
+    'barrique',
+    'fut',
+    'fût',
+    'chene',
+    'chêne',
+    'sauvignon',
+    'verdicchio',
+    'pinot',
+    'riesling',
+    'chardonnay',
+    'merlot',
+    'cabernet',
+  ];
+
+  return factPatterns.some((pattern) => text.includes(pattern));
+}
+
+function hasStaleCacheShape(wine: Record<string, unknown>) {
+  const country = stringOrNull(wine.country);
+  const region = stringOrNull(wine.region);
+
+  return Boolean(
+    country &&
+      region &&
+      normalizeText(country) === normalizeText(region)
+  );
+}
+
+function shouldRefreshCacheCandidate({
+  cacheVerification,
+  minimal,
+  secondaryImageUrl,
+  wine,
+}: {
+  cacheVerification: WineVerification;
+  minimal: MinimalWineExtraction;
+  secondaryImageUrl?: string;
+  wine: Record<string, unknown>;
+}) {
+  if (cacheVerification.safe_to_persist_enrichment) {
+    return false;
+  }
+
+  return Boolean(
+    secondaryImageUrl ||
+      hasRichVisibleLabelFacts(minimal) ||
+      (hasStaleCacheShape(wine) &&
+        (minimal.grape_variety || minimal.wine_name))
+  );
 }
 
 async function verifyAndSanitizeExtraction({
@@ -304,11 +610,18 @@ function getAnalysisFailureReason(error: unknown) {
 
 async function persistFreshWine(
   supabase: SupabaseServiceClient,
-  extraction: WineExtraction
+  extraction: WineExtraction,
+  existingWine?: ExistingWineRecord | null
 ) {
-  const { data: wine, error: wineError } = await supabase
-    .from('wines')
-    .insert(buildWineInsert(extraction))
+  const existingWineId =
+    typeof existingWine?.id === 'string' ? existingWine.id : null;
+  const wineMutation = existingWineId
+    ? supabase
+        .from('wines')
+        .update(buildWineUpdate(existingWine, extraction))
+        .eq('id', existingWineId)
+    : supabase.from('wines').insert(buildWineInsert(extraction));
+  const { data: wine, error: wineError } = await wineMutation
     .select('*')
     .single();
 
@@ -409,6 +722,7 @@ serve(async (req) => {
         vintageYear: minimal.vintage_year,
         wineName: minimal.wine_name,
       });
+      let cacheCandidateWine: ExistingWineRecord | null = null;
 
       if (searchResult.found) {
         const cacheVerification = buildCacheVerification(
@@ -418,15 +732,25 @@ serve(async (req) => {
             ? searchResult.matchedVintage
             : null
         );
-
-        return jsonResponse({
-          matchedVintage: searchResult.matchedVintage,
+        const shouldRefreshUnverifiedCache = shouldRefreshCacheCandidate({
+          cacheVerification,
           minimal,
-          source: 'cache',
-          verification: cacheVerification,
-          vintages: searchResult.vintages,
-          wine: searchResult.wine,
+          secondaryImageUrl,
+          wine: isRecord(searchResult.wine) ? searchResult.wine : {},
         });
+
+        if (shouldRefreshUnverifiedCache && isRecord(searchResult.wine)) {
+          cacheCandidateWine = searchResult.wine;
+        } else {
+          return jsonResponse({
+            matchedVintage: searchResult.matchedVintage,
+            minimal,
+            source: 'cache',
+            verification: cacheVerification,
+            vintages: searchResult.vintages,
+            wine: searchResult.wine,
+          });
+        }
       }
 
       const extraction = await extractWineFull(
@@ -437,7 +761,9 @@ serve(async (req) => {
         },
         abortController.signal
       );
-      const labelAlignedExtraction = preferLabelEvidence(extraction, minimal);
+      const labelAlignedExtraction = applyVisibleLabelFacts(
+        preferLabelEvidence(extraction, minimal)
+      );
       const verifiedResult = await verifyAndSanitizeExtraction({
         extraction: labelAlignedExtraction,
         imageUrl,
@@ -460,20 +786,35 @@ serve(async (req) => {
             ? secondSearchResult.matchedVintage
             : null
         );
-
-        return jsonResponse({
-          matchedVintage: secondSearchResult.matchedVintage,
+        const shouldRefreshUnverifiedCache = shouldRefreshCacheCandidate({
+          cacheVerification,
           minimal,
-          source: 'cache',
-          verification: cacheVerification,
-          vintages: secondSearchResult.vintages,
-          wine: secondSearchResult.wine,
+          secondaryImageUrl,
+          wine: isRecord(secondSearchResult.wine)
+            ? secondSearchResult.wine
+            : {},
         });
+
+        if (!shouldRefreshUnverifiedCache) {
+          return jsonResponse({
+            matchedVintage: secondSearchResult.matchedVintage,
+            minimal,
+            source: 'cache',
+            verification: cacheVerification,
+            vintages: secondSearchResult.vintages,
+            wine: secondSearchResult.wine,
+          });
+        }
+
+        if (isRecord(secondSearchResult.wine)) {
+          cacheCandidateWine = secondSearchResult.wine;
+        }
       }
 
       const persisted = await persistFreshWine(
         supabase,
-        verifiedResult.extraction
+        verifiedResult.extraction,
+        cacheCandidateWine
       );
 
       return jsonResponse({

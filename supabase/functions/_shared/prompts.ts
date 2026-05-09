@@ -31,10 +31,11 @@ WICHTIGE REGELN:
 15. Fülle ALLE Felder aus dem Schema aus.
 16. Bei Cuvées und Mischsätzen müssen alle sichtbar oder sicher belegten Rebsorten vollständig in grape_varieties stehen. grape_variety ist nur die lesbare Zusammenfassung dieser Liste.
 17. Bei Anreicherungs-Feldern wie Trinkfenster, Aromen, Beschreibung, Food Pairing, Serviertemperatur und Vinifikation gilt: Nur ausfüllen, wenn sie direkt auf dem Label sichtbar sind oder aus einer echten konkreten Quelle stammen. Allgemeines Weinwissen darf keine Fakten behaupten.
-18. Wenn keine konkrete Quelle genutzt wurde: lasse Beschreibung, Vinifikation, Food Pairing, Trinkfenster, Preis und Aromen lieber leer, statt plausibel zu raten.
-19. aromas enthält maximal 8 kurze deutsche Aromabegriffe.
-20. data_sources enthält nur konkrete URLs, wenn externe Quellen tatsächlich genutzt wurden. Sonst [].
-21. Gib estimated_vintage_year und estimated_vintage_year_reason IMMER als Keys aus. Wenn keine plausible Schätzung möglich ist: beide null.
+18. Rücketiketten zählen als direkte Label-Evidenz. Wenn dort Alkohol, Serviertemperatur, Trinkreife, Vinifikation, Appellation oder Rebsorte sichtbar stehen, extrahiere diese Felder präzise.
+19. Wenn keine konkrete Quelle und keine sichtbare Rücketikett-Evidenz genutzt wurde: lasse Beschreibung, Vinifikation, Food Pairing, Trinkfenster, Preis und Aromen lieber leer, statt plausibel zu raten.
+20. aromas enthält maximal 8 kurze deutsche Aromabegriffe.
+21. data_sources enthält nur konkrete URLs, wenn externe Quellen tatsächlich genutzt wurden. Sonst [].
+22. Gib estimated_vintage_year und estimated_vintage_year_reason IMMER als Keys aus. Wenn keine plausible Schätzung möglich ist: beide null.
 
 OUTPUT-SCHEMA:
 {
